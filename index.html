@@ -10,24 +10,91 @@ git subtree push --prefix web public main
 -->
 
 <!-- This goes into Squarespace Block -->
+ <!-- Nevermind. Github page it is -->
 
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/davidthefuturist/tuner-i-just-met-her@main/web/style.css">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+    <title>VESC Tuner</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #121212; color: #fff; padding: 20px; text-align: center; }
+        .container { max-width: 400px; margin: auto; border: 1px solid #333; padding: 20px; border-radius: 15px; background: #1a1a1a; }
+        .status { padding: 10px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #ff4444; color: #ff4444; font-size: 12px; }
+        .connected { border-color: #44ff44; color: #44ff44; }
+        section { text-align: left; margin-bottom: 15px; }
+        label { font-size: 11px; color: #888; font-weight: bold; text-transform: uppercase; }
+        input { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px; border: 1px solid #333; background: #121212; color: #fff; font-size: 16px; margin-top: 5px; outline: none; }
+        .btn { width: 100%; padding: 15px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        .connect-btn { background: #44ff44; color: #000; }
+        .stop-btn { background: #ff4444; color: #fff; font-size: 20px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Tuner? I just met her.</h2>
+        <div id="status" class="status">DISCONNECTED</div>
+        <button id="connectBtn" class="btn connect-btn">CONNECT TO VESC</button>
 
-<div id="vesc-container">
-    <div id="status" class="status">NOT CONNECTED</div>
-    <button onclick="connectBLE()" style="width:100%; padding:10px; margin-bottom:10px;">Connect BLE</button>
-    
-    <section>
-        <label>DUTY CYCLE</label>
-        <input type="number" id="duty" placeholder="0" onkeydown="if(event.key==='Enter') sendData('DUTY','duty')">
-    </section>
+        <div id="controls" style="display:none;">
+            <section>
+                <label>Duty Cycle (-255 to 255)</label>
+                <input type="number" id="dutyIn" value="0">
+            </section>
+            <section>
+                <label>Current Limit (A)</label>
+                <input type="number" id="climIn" value="20">
+            </section>
+            <button class="btn stop-btn" id="stopBtn">STOP</button>
+        </div>
+    </div>
 
-    <section>
-        <label>CURRENT LIMIT</label>
-        <input type="number" id="clim" placeholder="20" onkeydown="if(event.key==='Enter') sendData('CLIM','clim')">
-    </section>
+    <script>
+        let vescChar;
+        const SERVICE_UUID = 0x1234;
+        const CHAR_UUID = 0x5678;
 
-    <button class="btn-stop" onclick="document.getElementById('duty').value=0; sendData('DUTY','duty')">STOP</button>
-</div>
+        const connectBtn = document.getElementById('connectBtn');
+        const controls = document.getElementById('controls');
+        const status = document.getElementById('status');
 
-<script src="https://cdn.jsdelivr.net/gh/davidthefuturist/tuner-i-just-met-her@main/web/app.js"></script>
+        connectBtn.addEventListener('click', async () => {
+            try {
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'VESC_C3_CONTROLLER' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                vescChar = await service.getCharacteristic(CHAR_UUID);
+
+                status.innerText = "CONNECTED";
+                status.className = "status connected";
+                connectBtn.style.display = "none";
+                controls.style.display = "block";
+            } catch (e) {
+                alert("Connection failed: " + e);
+            }
+        });
+
+        async function send(type, val) {
+            if (!vescChar) return;
+            const encoder = new TextEncoder();
+            await vescChar.writeValue(encoder.encode(`${type}:${val}`));
+        }
+
+        document.getElementById('dutyIn').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                send('DUTY', e.target.value);
+                e.target.blur();
+            }
+        });
+
+        document.getElementById('stopBtn').addEventListener('click', () => {
+            document.getElementById('dutyIn').value = 0;
+            send('DUTY', 0);
+        });
+    </script>
+</body>
+</html>
