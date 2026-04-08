@@ -1,0 +1,14 @@
+#vesc-container {
+    background: #121212; color: #e0e0e0; padding: 20px; border-radius: 15px;
+    max-width: 400px; margin: 20px auto; border: 1px solid #333; text-align: center;
+}
+.status { font-size: 12px; margin-bottom: 20px; padding: 8px; border-radius: 5px; border: 1px solid #444; }
+.connected { color: #44ff44; border-color: #44ff44; }
+section { background: #1e1e1e; padding: 15px; border-radius: 10px; margin-bottom: 12px; text-align: left; }
+label { font-size: 11px; color: #888; font-weight: bold; }
+/* 16px font prevents iOS auto-zoom */
+input {
+    width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px;
+    border: 1px solid #333; background: #121212; color: #fff; font-size: 16px; margin-top: 8px;
+}
+.btn-stop { background: #ff4444; color: #fff; width: 100%; padding: 15px; border-radius: 10px; font-weight: bold; font-size: 18px; margin-top: 10px; }
