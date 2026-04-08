@@ -1,0 +1,147 @@
+<div id="vesc-tuner-container">
+  <style>
+    #vesc-tuner-container {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #121212;
+      color: #e0e0e0;
+      padding: 20px;
+      border-radius: 15px;
+      max-width: 400px;
+      margin: 20px auto;
+      border: 1px solid #333;
+      text-align: center;
+    }
+    .status-bar {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 20px;
+      padding: 5px;
+      border-radius: 5px;
+      background: #1a1a1a;
+    }
+    .connected { color: #44ff44; border: 1px solid #44ff44; }
+    .disconnected { color: #ff4444; border: 1px solid #ff4444; }
+
+    section {
+      background: #1e1e1e;
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      text-align: left;
+    }
+    label { font-size: 11px; color: #888; font-weight: bold; text-transform: uppercase; }
+    
+    /* 16px font prevents iOS auto-zoom */
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background: #121212;
+      color: #fff;
+      font-size: 16px;
+      margin-top: 5px;
+      outline: none;
+    }
+    input:focus { border-color: #44ff44; }
+
+    .btn {
+      width: 100%;
+      padding: 15px;
+      border-radius: 10px;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 10px;
+    }
+    .connect-btn { background: #44ff44; color: #000; }
+    .stop-btn { background: #ff4444; color: #fff; margin-top: 20px; font-size: 20px; }
+  </style>
+
+  <h2>Tuner? I just met her.</h2>
+  <div id="status" class="status-bar disconnected">Disconnected</div>
+
+  <button id="connectBtn" class="btn connect-btn" onclick="connectBLE()">Connect to VESC</button>
+
+  <div id="controls" style="display:none;">
+    <section>
+      <label>Duty Cycle (-255 to 255)</label>
+      <input type="number" id="dutyIn" value="0" onkeydown="if(event.key==='Enter') sendDuty()">
+    </section>
+
+    <section>
+      <label>Current Limit (A)</label>
+      <input type="number" id="climIn" value="20" onkeydown="if(event.key==='Enter') sendLimit('CLIM', 'climIn')">
+    </section>
+
+    <section>
+      <label>Regen Limit (A)</label>
+      <input type="number" id="rlimIn" value="10" onkeydown="if(event.key==='Enter') sendLimit('RLIM', 'rlimIn')">
+    </section>
+
+    <button class="btn stop-btn" onclick="emergencyStop()">EMERGENCY STOP</button>
+  </div>
+
+  <script>
+    let vescDevice, controlChar, limitChar;
+    const SERVICE_UUID = 0x1234;
+    const DUTY_CHAR_UUID = 0x5678;
+    const LIMIT_CHAR_UUID = 0x9ABC;
+
+    async function connectBLE() {
+      try {
+        vescDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ name: 'VESC_C3_CONTROLLER' }],
+          optionalServices: [SERVICE_UUID]
+        });
+
+        const server = await vescDevice.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        controlChar = await service.getCharacteristic(DUTY_CHAR_UUID);
+        limitChar = await service.getCharacteristic(LIMIT_CHAR_UUID);
+
+        document.getElementById('status').innerText = "Connected";
+        document.getElementById('status').className = "status-bar connected";
+        document.getElementById('connectBtn').style.display = "none";
+        document.getElementById('controls').style.display = "block";
+
+        vescDevice.addEventListener('gattserverdisconnected', onDisconnected);
+      } catch (error) {
+        console.log("BLE Error: " + error);
+      }
+    }
+
+    function onDisconnected() {
+      document.getElementById('status').innerText = "Disconnected";
+      document.getElementById('status').className = "status-bar disconnected";
+      document.getElementById('connectBtn').style.display = "block";
+      document.getElementById('controls').style.display = "none";
+    }
+
+    async function sendDuty() {
+      if (!controlChar) return;
+      let val = parseInt(document.getElementById('dutyIn').value);
+      // Map -255/255 to -127/127 for the int8_t on the ESP32
+      let mapped = Math.max(-127, Math.min(127, Math.round((val / 255) * 127)));
+      await controlChar.writeValue(new Int8Array([mapped]));
+      document.getElementById('dutyIn').blur();
+    }
+
+    async function sendLimit(type, id) {
+      if (!limitChar) return;
+      let val = document.getElementById(id).value;
+      let encoder = new TextEncoder();
+      // Sending as a string "TYPE:VAL" just like your old WebSocket logic
+      await limitChar.writeValue(encoder.encode(type + ":" + val));
+      document.getElementById(id).blur();
+    }
+
+    function emergencyStop() {
+      document.getElementById('dutyIn').value = 0;
+      sendDuty();
+    }
+  </script>
+</div>
