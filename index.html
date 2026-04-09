@@ -17,23 +17,25 @@ git subtree push --prefix web public main
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-    <title>VESC Tuner</title>
+    <title>VESC Tuner Pro</title>
     <style>
         body { font-family: -apple-system, sans-serif; background: #121212; color: #fff; padding: 20px; text-align: center; }
         .container { max-width: 400px; margin: auto; border: 1px solid #333; padding: 20px; border-radius: 15px; background: #1a1a1a; }
-        .status { padding: 10px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #ff4444; color: #ff4444; font-size: 12px; }
+        .status { padding: 10px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #ff4444; color: #ff4444; font-size: 12px; font-weight: bold; }
         .connected { border-color: #44ff44; color: #44ff44; }
         
-        /* Telemetry Grid */
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        .card { background: #222; padding: 10px; border-radius: 8px; border: 1px solid #444; }
-        .card label { font-size: 10px; color: #888; display: block; }
-        .card val { font-size: 20px; font-weight: bold; color: #44ff44; }
+        .card { background: #000; padding: 15px; border-radius: 10px; border: 1px solid #333; }
+        .card label { font-size: 10px; color: #888; display: block; margin-bottom: 5px; }
+        .card span { font-size: 22px; font-weight: bold; color: #44ff44; font-family: monospace; }
+        .regen-val { color: #44bbff !important; }
 
         section { text-align: left; margin-bottom: 15px; }
-        label { font-size: 11px; color: #888; font-weight: bold; text-transform: uppercase; }
-        input { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px; border: 1px solid #333; background: #121212; color: #fff; font-size: 16px; margin-top: 5px; outline: none; }
-        .btn { width: 100%; padding: 15px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        label { font-size: 11px; color: #aaa; font-weight: bold; text-transform: uppercase; }
+        input { width: 100%; box-sizing: border-box; padding: 14px; border-radius: 8px; border: 1px solid #333; background: #000; color: #fff; font-size: 16px; margin-top: 5px; outline: none; }
+        input:focus { border-color: #44ff44; }
+        
+        .btn { width: 100%; padding: 16px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 10px; }
         .connect-btn { background: #44ff44; color: #000; }
         .stop-btn { background: #ff4444; color: #fff; font-size: 20px; margin-top: 20px; }
     </style>
@@ -43,16 +45,19 @@ git subtree push --prefix web public main
         <h2>Tuner? I just met her.</h2>
         <div id="status" class="status">DISCONNECTED</div>
         
-        <div class="grid" id="telemetry" style="display:none;">
-            <div class="card"><label>CURRENT</label><val id="readCur">0.0</val>A</div>
-            <div class="card"><label>ERPM</label><val id="readRpm">0</val></div>
+        <div id="telemetry" style="display:none;">
+            <div class="grid">
+                <div class="card"><label>CURRENT</label><span id="readCur">0.0</span><small> A</small></div>
+                <div class="card"><label>REGEN</label><span id="readRegen" class="regen-val">0.0</span><small> A</small></div>
+            </div>
+            <div class="card" style="margin-bottom: 20px;"><label>ERPM</label><span id="readRpm">0</span></div>
         </div>
 
-        <button id="connectBtn" class="btn connect-btn">CONNECT TO VESC</button>
+        <button id="connectBtn" class="btn connect-btn">SEARCH FOR VESC</button>
 
         <div id="controls" style="display:none;">
-            <section><label>Duty Cycle</label><input type="number" id="dutyIn" value="0"></section>
-            <section><label>Discharge Limit</label><input type="number" id="climIn" value="20"></section>
+            <section><label>Duty Cycle (Enter to Send)</label><input type="number" id="dutyIn" value="0"></section>
+            <section><label>Current Limit</label><input type="number" id="climIn" value="20"></section>
             <button class="btn stop-btn" id="stopBtn">EMERGENCY STOP</button>
         </div>
     </div>
@@ -66,24 +71,32 @@ git subtree push --prefix web public main
         document.getElementById('connectBtn').addEventListener('click', async () => {
             try {
                 const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'VESC_C3_CONTROLLER' }],
+                    filters: [{ name: 'VESC_C3_CONTROLLER' }, { services: [SERVICE_UUID] }],
                     optionalServices: [SERVICE_UUID]
                 });
+
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(SERVICE_UUID);
                 cmdChar = await service.getCharacteristic(CMD_UUID);
                 readChar = await service.getCharacteristic(READ_UUID);
 
-                // Subscribe to Telemetry
                 await readChar.startNotifications();
-                readChar.addEventListener('characteristicvaluechanged', (event) => {
-                    const str = new TextDecoder().decode(event.target.value);
-                    // Parse "CUR:1.5,RPM:12000"
+                readChar.addEventListener('characteristicvaluechanged', (e) => {
+                    const str = new TextDecoder().decode(e.target.value);
                     const parts = str.split(',');
                     parts.forEach(p => {
                         const [k, v] = p.split(':');
-                        if(k === 'CUR') document.getElementById('readCur').innerText = v;
-                        if(k === 'RPM') document.getElementById('readRpm').innerText = v;
+                        const val = parseFloat(v);
+                        if(k === 'CUR') {
+                            if (val >= 0) {
+                                document.getElementById('readCur').innerText = val.toFixed(1);
+                                document.getElementById('readRegen').innerText = "0.0";
+                            } else {
+                                document.getElementById('readCur').innerText = "0.0";
+                                document.getElementById('readRegen').innerText = Math.abs(val).toFixed(1);
+                            }
+                        }
+                        if(k === 'RPM') document.getElementById('readRpm').innerText = Math.round(val);
                     });
                 });
 
@@ -91,7 +104,7 @@ git subtree push --prefix web public main
                 document.getElementById('status').className = "status connected";
                 document.getElementById('connectBtn').style.display = "none";
                 document.getElementById('controls').style.display = "block";
-                document.getElementById('telemetry').style.display = "grid";
+                document.getElementById('telemetry').style.display = "block";
             } catch (e) { alert(e); }
         });
 
