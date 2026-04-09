@@ -4,7 +4,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "Added actual duty cycle readout"
+git commit -m "A/B Testing current control vs RPM control"
 git subtree push --prefix web public main 
 
 -->
@@ -32,8 +32,16 @@ git subtree push --prefix web public main
 
         section { text-align: left; margin-bottom: 15px; }
         label { font-size: 11px; color: #aaa; font-weight: bold; text-transform: uppercase; }
-        input { width: 100%; box-sizing: border-box; padding: 14px; border-radius: 8px; border: 1px solid #333; background: #000; color: #fff; font-size: 16px; margin-top: 5px; outline: none; }
-        input:focus { border-color: #44ff44; }
+        
+        /* Fixed CSS Warning with 'appearance' */
+        select, input { 
+            width: 100%; box-sizing: border-box; padding: 14px; border-radius: 8px; 
+            border: 1px solid #333; background: #000; color: #fff; font-size: 16px; 
+            margin-top: 5px; outline: none; 
+            -webkit-appearance: none;
+            appearance: none; 
+        }
+        input:focus, select:focus { border-color: #44ff44; }
         
         .btn { width: 100%; padding: 16px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 10px; }
         .connect-btn { background: #44ff44; color: #000; }
@@ -57,7 +65,15 @@ git subtree push --prefix web public main
         <button id="connectBtn" class="btn connect-btn">SEARCH FOR CONTROLLER</button>
 
         <div id="controls" style="display:none;">
-            <section><label>Global Duty Cycle (0-255)</label><input type="number" id="dutyIn" value="0"></section>
+            <section>
+                <label>Control Mode</label>
+                <select id="modeSelect">
+                    <option value="0">Current (Approach 2)</option>
+                    <option value="1">RPM (Approach 3)</option>
+                </select>
+            </section>
+
+            <section><label>Global Input (0-100%)</label><input type="number" id="driveIn" value="0"></section>
             <section><label>Current Limit (A)</label><input type="number" id="climIn" value="20"></section>
             <section><label>Regen Limit (A)</label><input type="number" id="rlimIn" value="10"></section>
             <section><label>RPM Limit (ERPM)</label><input type="number" id="mlimIn" value="15000"></section>
@@ -88,7 +104,7 @@ git subtree push --prefix web public main
                     const reports = str.split('|');
                     reports.forEach(report => {
                         if(!report) return;
-                        const [id, rpm, cur, duty] = report.split(':'); // Parse 4 values now
+                        const [id, rpm, cur, duty] = report.split(':');
                         
                         if(!document.getElementById(`head-${id}`)) {
                             document.getElementById('idRow').insertAdjacentHTML('beforeend', `<th id="head-${id}">${id}</th>`);
@@ -97,7 +113,7 @@ git subtree push --prefix web public main
                             document.getElementById('dutyRow').insertAdjacentHTML('beforeend', `<td id="duty-${id}" class="val-text" style="color:#ffbb44">0.0%</td>`);
                         }
                         
-                        document.getElementById(`rpm-${id}`).innerText = rpm;
+                        document.getElementById(`rpm-${id}`).innerText = Math.round(rpm);
                         document.getElementById(`cur-${id}`).innerText = cur;
                         document.getElementById(`duty-${id}`).innerText = duty + "%";
                     });
@@ -122,9 +138,16 @@ git subtree push --prefix web public main
             });
         };
 
-        setup('dutyIn', 'DUTY'); setup('climIn', 'CLIM'); setup('rlimIn', 'RLIM'); setup('mlimIn', 'MLIM');
+        // Command mapping for A/B firmware
+        document.getElementById('modeSelect').addEventListener('change', (e) => send('MODE', e.target.value));
+        setup('driveIn', 'DRIVE'); 
+        setup('climIn', 'CLIM'); 
+        setup('rlimIn', 'RLIM'); 
+        setup('mlimIn', 'MLIM');
+
         document.getElementById('stopBtn').addEventListener('click', () => { 
-            document.getElementById('dutyIn').value = 0; send('DUTY', 0); 
+            document.getElementById('driveIn').value = 0; 
+            send('DRIVE', 0); 
         });
     </script>
 </body>
