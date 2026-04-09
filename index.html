@@ -4,7 +4,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "Adding RPM Limit And Regen Limit"
+git commit -m "Adding RPM, current, and regen readout"
 git subtree push --prefix web public main 
 
 -->
@@ -23,10 +23,16 @@ git subtree push --prefix web public main
         .container { max-width: 400px; margin: auto; border: 1px solid #333; padding: 20px; border-radius: 15px; background: #1a1a1a; }
         .status { padding: 10px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #ff4444; color: #ff4444; font-size: 12px; }
         .connected { border-color: #44ff44; color: #44ff44; }
+        
+        /* Telemetry Grid */
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        .card { background: #222; padding: 10px; border-radius: 8px; border: 1px solid #444; }
+        .card label { font-size: 10px; color: #888; display: block; }
+        .card val { font-size: 20px; font-weight: bold; color: #44ff44; }
+
         section { text-align: left; margin-bottom: 15px; }
         label { font-size: 11px; color: #888; font-weight: bold; text-transform: uppercase; }
         input { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px; border: 1px solid #333; background: #121212; color: #fff; font-size: 16px; margin-top: 5px; outline: none; }
-        input:focus { border-color: #44ff44; }
         .btn { width: 100%; padding: 15px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 10px; }
         .connect-btn { background: #44ff44; color: #000; }
         .stop-btn { background: #ff4444; color: #fff; font-size: 20px; margin-top: 20px; }
@@ -36,39 +42,28 @@ git subtree push --prefix web public main
     <div class="container">
         <h2>Tuner? I just met her.</h2>
         <div id="status" class="status">DISCONNECTED</div>
+        
+        <div class="grid" id="telemetry" style="display:none;">
+            <div class="card"><label>CURRENT</label><val id="readCur">0.0</val>A</div>
+            <div class="card"><label>ERPM</label><val id="readRpm">0</val></div>
+        </div>
+
         <button id="connectBtn" class="btn connect-btn">CONNECT TO VESC</button>
 
         <div id="controls" style="display:none;">
-            <section>
-                <label>Duty Cycle (-255 to 255)</label>
-                <input type="number" id="dutyIn" value="0">
-            </section>
-            <section>
-                <label>Current Limit (A)</label>
-                <input type="number" id="climIn" value="20">
-            </section>
-            <section>
-                <label>Regen Limit (A)</label>
-                <input type="number" id="rlimIn" value="10">
-            </section>
-            <section>
-                <label>RPM Limit (ERPM)</label>
-                <input type="number" id="mlimIn" value="15000">
-            </section>
+            <section><label>Duty Cycle</label><input type="number" id="dutyIn" value="0"></section>
+            <section><label>Discharge Limit</label><input type="number" id="climIn" value="20"></section>
             <button class="btn stop-btn" id="stopBtn">EMERGENCY STOP</button>
         </div>
     </div>
 
     <script>
-        let vescChar;
+        let cmdChar, readChar;
         const SERVICE_UUID = 0x1234;
-        const CHAR_UUID = 0x5678;
+        const CMD_UUID = 0x5678;
+        const READ_UUID = 0x9ABC;
 
-        const connectBtn = document.getElementById('connectBtn');
-        const controls = document.getElementById('controls');
-        const status = document.getElementById('status');
-
-        connectBtn.addEventListener('click', async () => {
+        document.getElementById('connectBtn').addEventListener('click', async () => {
             try {
                 const device = await navigator.bluetooth.requestDevice({
                     filters: [{ name: 'VESC_C3_CONTROLLER' }],
@@ -76,42 +71,37 @@ git subtree push --prefix web public main
                 });
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(SERVICE_UUID);
-                vescChar = await service.getCharacteristic(CHAR_UUID);
+                cmdChar = await service.getCharacteristic(CMD_UUID);
+                readChar = await service.getCharacteristic(READ_UUID);
 
-                status.innerText = "CONNECTED";
-                status.className = "status connected";
-                connectBtn.style.display = "none";
-                controls.style.display = "block";
-            } catch (e) {
-                alert("Connection failed: " + e);
-            }
+                // Subscribe to Telemetry
+                await readChar.startNotifications();
+                readChar.addEventListener('characteristicvaluechanged', (event) => {
+                    const str = new TextDecoder().decode(event.target.value);
+                    // Parse "CUR:1.5,RPM:12000"
+                    const parts = str.split(',');
+                    parts.forEach(p => {
+                        const [k, v] = p.split(':');
+                        if(k === 'CUR') document.getElementById('readCur').innerText = v;
+                        if(k === 'RPM') document.getElementById('readRpm').innerText = v;
+                    });
+                });
+
+                document.getElementById('status').innerText = "CONNECTED";
+                document.getElementById('status').className = "status connected";
+                document.getElementById('connectBtn').style.display = "none";
+                document.getElementById('controls').style.display = "block";
+                document.getElementById('telemetry').style.display = "grid";
+            } catch (e) { alert(e); }
         });
 
         async function send(type, val) {
-            if (!vescChar) return;
-            const encoder = new TextEncoder();
-            await vescChar.writeValue(encoder.encode(`${type}:${val}`));
+            if (!cmdChar) return;
+            await cmdChar.writeValue(new TextEncoder().encode(`${type}:${val}`));
         }
 
-        // Event Listeners for 'Enter' key on all inputs
-        const setupListener = (id, type) => {
-            document.getElementById(id).addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    send(type, e.target.value);
-                    e.target.blur();
-                }
-            });
-        };
-
-        setupListener('dutyIn', 'DUTY');
-        setupListener('climIn', 'CLIM');
-        setupListener('rlimIn', 'RLIM');
-        setupListener('mlimIn', 'MLIM');
-
-        document.getElementById('stopBtn').addEventListener('click', () => {
-            document.getElementById('dutyIn').value = 0;
-            send('DUTY', 0);
-        });
+        document.getElementById('dutyIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') { send('DUTY', e.target.value); e.target.blur(); } });
+        document.getElementById('stopBtn').addEventListener('click', () => { document.getElementById('dutyIn').value = 0; send('DUTY', 0); });
     </script>
 </body>
 </html>
