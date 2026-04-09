@@ -4,7 +4,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "The bluetooth filter works, but we're not able to control motors now"
+git commit -m "Are we able to control motors now? We also have supported up to 10 VESCs in the readout"
 git subtree push --prefix web public main 
 
 -->
@@ -17,18 +17,18 @@ git subtree push --prefix web public main
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-    <title>VESC Tuner Pro</title>
+    <title>VESC Fleet Tuner</title>
     <style>
         body { font-family: -apple-system, sans-serif; background: #121212; color: #fff; padding: 20px; text-align: center; }
-        .container { max-width: 400px; margin: auto; border: 1px solid #333; padding: 20px; border-radius: 15px; background: #1a1a1a; }
+        .container { max-width: 500px; margin: auto; border: 1px solid #333; padding: 20px; border-radius: 15px; background: #1a1a1a; }
         .status { padding: 10px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #ff4444; color: #ff4444; font-size: 12px; font-weight: bold; }
         .connected { border-color: #44ff44; color: #44ff44; }
         
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        .card { background: #000; padding: 15px; border-radius: 10px; border: 1px solid #333; }
-        .card label { font-size: 10px; color: #888; display: block; margin-bottom: 5px; }
-        .card span { font-size: 22px; font-weight: bold; color: #44ff44; font-family: monospace; }
-        .regen-val { color: #44bbff !important; }
+        table { width: 100%; border-collapse: collapse; background: #000; border-radius: 10px; margin-bottom: 20px; }
+        th, td { padding: 12px; border: 1px solid #222; text-align: center; }
+        th { font-size: 10px; color: #44ff44; text-transform: uppercase; }
+        .metric-label { text-align: left; color: #888; font-size: 11px; font-weight: bold; width: 80px; }
+        .val-text { font-family: monospace; font-weight: bold; font-size: 16px; }
 
         section { text-align: left; margin-bottom: 15px; }
         label { font-size: 11px; color: #aaa; font-weight: bold; text-transform: uppercase; }
@@ -42,22 +42,24 @@ git subtree push --prefix web public main
 </head>
 <body>
     <div class="container">
-        <h2>Tuner? I just met her.</h2>
+        <h2>VESC Fleet Tuner</h2>
         <div id="status" class="status">DISCONNECTED</div>
         
-        <div id="telemetry" style="display:none;">
-            <div class="grid">
-                <div class="card"><label>CURRENT</label><span id="readCur">0.0</span><small> A</small></div>
-                <div class="card"><label>REGEN</label><span id="readRegen" class="regen-val">0.0</span><small> A</small></div>
-            </div>
-            <div class="card" style="margin-bottom: 20px;"><label>ERPM</label><span id="readRpm">0</span></div>
+        <div id="telemetry" style="display:none; overflow-x: auto;">
+            <table>
+                <tr id="idRow"><td class="metric-label">VESC ID</td></tr>
+                <tr id="rpmRow"><td class="metric-label">ERPM</td></tr>
+                <tr id="curRow"><td class="metric-label">CURRENT</td></tr>
+            </table>
         </div>
 
-        <button id="connectBtn" class="btn connect-btn">SEARCH FOR VESC</button>
+        <button id="connectBtn" class="btn connect-btn">SEARCH FOR CONTROLLER</button>
 
         <div id="controls" style="display:none;">
-            <section><label>Duty Cycle (Enter to Send)</label><input type="number" id="dutyIn" value="0"></section>
-            <section><label>Current Limit</label><input type="number" id="climIn" value="20"></section>
+            <section><label>Global Duty Cycle (0-255)</label><input type="number" id="dutyIn" value="0"></section>
+            <section><label>Current Limit (A)</label><input type="number" id="climIn" value="20"></section>
+            <section><label>Regen Limit (A)</label><input type="number" id="rlimIn" value="10"></section>
+            <section><label>RPM Limit (ERPM)</label><input type="number" id="mlimIn" value="15000"></section>
             <button class="btn stop-btn" id="stopBtn">EMERGENCY STOP</button>
         </div>
     </div>
@@ -74,7 +76,6 @@ git subtree push --prefix web public main
                     filters: [{ name: 'VESC_C3_CONTROLLER' }, { services: [SERVICE_UUID] }],
                     optionalServices: [SERVICE_UUID]
                 });
-
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(SERVICE_UUID);
                 cmdChar = await service.getCharacteristic(CMD_UUID);
@@ -83,20 +84,17 @@ git subtree push --prefix web public main
                 await readChar.startNotifications();
                 readChar.addEventListener('characteristicvaluechanged', (e) => {
                     const str = new TextDecoder().decode(e.target.value);
-                    const parts = str.split(',');
-                    parts.forEach(p => {
-                        const [k, v] = p.split(':');
-                        const val = parseFloat(v);
-                        if(k === 'CUR') {
-                            if (val >= 0) {
-                                document.getElementById('readCur').innerText = val.toFixed(1);
-                                document.getElementById('readRegen').innerText = "0.0";
-                            } else {
-                                document.getElementById('readCur').innerText = "0.0";
-                                document.getElementById('readRegen').innerText = Math.abs(val).toFixed(1);
-                            }
+                    const reports = str.split('|');
+                    reports.forEach(report => {
+                        if(!report) return;
+                        const [id, rpm, cur] = report.split(':');
+                        if(!document.getElementById(`head-${id}`)) {
+                            document.getElementById('idRow').insertAdjacentHTML('beforeend', `<th id="head-${id}">${id}</th>`);
+                            document.getElementById('rpmRow').insertAdjacentHTML('beforeend', `<td id="rpm-${id}" class="val-text">0</td>`);
+                            document.getElementById('curRow').insertAdjacentHTML('beforeend', `<td id="cur-${id}" class="val-text" style="color:#44bbff">0.0</td>`);
                         }
-                        if(k === 'RPM') document.getElementById('readRpm').innerText = Math.round(val);
+                        document.getElementById(`rpm-${id}`).innerText = rpm;
+                        document.getElementById(`cur-${id}`).innerText = cur;
                     });
                 });
 
@@ -113,8 +111,16 @@ git subtree push --prefix web public main
             await cmdChar.writeValue(new TextEncoder().encode(`${type}:${val}`));
         }
 
-        document.getElementById('dutyIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') { send('DUTY', e.target.value); e.target.blur(); } });
-        document.getElementById('stopBtn').addEventListener('click', () => { document.getElementById('dutyIn').value = 0; send('DUTY', 0); });
+        const setup = (id, type) => {
+            document.getElementById(id).addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { send(type, e.target.value); e.target.blur(); }
+            });
+        };
+
+        setup('dutyIn', 'DUTY'); setup('climIn', 'CLIM'); setup('rlimIn', 'RLIM'); setup('mlimIn', 'MLIM');
+        document.getElementById('stopBtn').addEventListener('click', () => { 
+            document.getElementById('dutyIn').value = 0; send('DUTY', 0); 
+        });
     </script>
 </body>
 </html>
