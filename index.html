@@ -4,7 +4,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "Are we able to control motors now? We also have supported up to 10 VESCs in the readout"
+git commit -m "Added actual duty cycle readout"
 git subtree push --prefix web public main 
 
 -->
@@ -50,6 +50,7 @@ git subtree push --prefix web public main
                 <tr id="idRow"><td class="metric-label">VESC ID</td></tr>
                 <tr id="rpmRow"><td class="metric-label">ERPM</td></tr>
                 <tr id="curRow"><td class="metric-label">CURRENT</td></tr>
+                <tr id="dutyRow"><td class="metric-label">ACTUAL DUTY</td></tr>
             </table>
         </div>
 
@@ -87,14 +88,18 @@ git subtree push --prefix web public main
                     const reports = str.split('|');
                     reports.forEach(report => {
                         if(!report) return;
-                        const [id, rpm, cur] = report.split(':');
+                        const [id, rpm, cur, duty] = report.split(':'); // Parse 4 values now
+                        
                         if(!document.getElementById(`head-${id}`)) {
                             document.getElementById('idRow').insertAdjacentHTML('beforeend', `<th id="head-${id}">${id}</th>`);
                             document.getElementById('rpmRow').insertAdjacentHTML('beforeend', `<td id="rpm-${id}" class="val-text">0</td>`);
                             document.getElementById('curRow').insertAdjacentHTML('beforeend', `<td id="cur-${id}" class="val-text" style="color:#44bbff">0.0</td>`);
+                            document.getElementById('dutyRow').insertAdjacentHTML('beforeend', `<td id="duty-${id}" class="val-text" style="color:#ffbb44">0.0%</td>`);
                         }
+                        
                         document.getElementById(`rpm-${id}`).innerText = rpm;
                         document.getElementById(`cur-${id}`).innerText = cur;
+                        document.getElementById(`duty-${id}`).innerText = duty + "%";
                     });
                 });
 
