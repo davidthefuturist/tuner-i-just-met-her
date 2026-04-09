@@ -1,5 +1,5 @@
 <!-- Terminal Command For Pushing to Public Facing Repo: -->
-<!-- # 3. Commit it to local feature/ble-remote branch
+<!-- Commit it to local feature/ble-remote branch
 
 SAVE THEN:
 
@@ -26,6 +26,7 @@ git subtree push --prefix web public main
         section { text-align: left; margin-bottom: 15px; }
         label { font-size: 11px; color: #888; font-weight: bold; text-transform: uppercase; }
         input { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px; border: 1px solid #333; background: #121212; color: #fff; font-size: 16px; margin-top: 5px; outline: none; }
+        input:focus { border-color: #44ff44; }
         .btn { width: 100%; padding: 15px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 10px; }
         .connect-btn { background: #44ff44; color: #000; }
         .stop-btn { background: #ff4444; color: #fff; font-size: 20px; margin-top: 20px; }
@@ -46,7 +47,15 @@ git subtree push --prefix web public main
                 <label>Current Limit (A)</label>
                 <input type="number" id="climIn" value="20">
             </section>
-            <button class="btn stop-btn" id="stopBtn">STOP</button>
+            <section>
+                <label>Regen Limit (A)</label>
+                <input type="number" id="rlimIn" value="10">
+            </section>
+            <section>
+                <label>RPM Limit (ERPM)</label>
+                <input type="number" id="mlimIn" value="15000">
+            </section>
+            <button class="btn stop-btn" id="stopBtn">EMERGENCY STOP</button>
         </div>
     </div>
 
@@ -84,12 +93,20 @@ git subtree push --prefix web public main
             await vescChar.writeValue(encoder.encode(`${type}:${val}`));
         }
 
-        document.getElementById('dutyIn').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                send('DUTY', e.target.value);
-                e.target.blur();
-            }
-        });
+        // Event Listeners for 'Enter' key on all inputs
+        const setupListener = (id, type) => {
+            document.getElementById(id).addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    send(type, e.target.value);
+                    e.target.blur();
+                }
+            });
+        };
+
+        setupListener('dutyIn', 'DUTY');
+        setupListener('climIn', 'CLIM');
+        setupListener('rlimIn', 'RLIM');
+        setupListener('mlimIn', 'MLIM');
 
         document.getElementById('stopBtn').addEventListener('click', () => {
             document.getElementById('dutyIn').value = 0;
