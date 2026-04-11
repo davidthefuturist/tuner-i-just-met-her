@@ -4,7 +4,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "A/B Testing current control vs RPM control"
+git commit -m "Added Deadband to A/B Testing Interface"
 git subtree push --prefix web public main 
 
 -->
@@ -65,18 +65,30 @@ git subtree push --prefix web public main
         <button id="connectBtn" class="btn connect-btn">SEARCH FOR CONTROLLER</button>
 
         <div id="controls" style="display:none;">
+            
             <section>
-                <label>Control Mode</label>
-                <select id="modeSelect">
-                    <option value="0">Current (Approach 2)</option>
-                    <option value="1">RPM (Approach 3)</option>
+                <label>Input Source</label>
+                <select id="sourceSelect">
+                    <option value="0">Web Override (Input Box)</option>
+                    <option value="1">BLE Remote</option>
                 </select>
             </section>
 
-            <section><label>Global Input (0-100%)</label><input type="number" id="driveIn" value="0"></section>
+            <section>
+                <label>Control Mode</label>
+                <select id="modeSelect">
+                    <option value="0">Current (Torque)</option>
+                    <option value="1">RPM (Speed)</option>
+                </select>
+            </section>
+
+            <section><label>Drive Input (-255 to 255)</label><input type="number" id="driveIn" value="0" min="-255" max="255"></section>
+            <section><label>Deadband (+/- Raw Value)</label><input type="number" id="dbandIn" value="15"></section>
+            
             <section><label>Current Limit (A)</label><input type="number" id="climIn" value="20"></section>
             <section><label>Regen Limit (A)</label><input type="number" id="rlimIn" value="10"></section>
             <section><label>RPM Limit (ERPM)</label><input type="number" id="mlimIn" value="15000"></section>
+            
             <button class="btn stop-btn" id="stopBtn">EMERGENCY STOP</button>
         </div>
     </div>
@@ -139,8 +151,11 @@ git subtree push --prefix web public main
         };
 
         // Command mapping for A/B firmware
+        document.getElementById('sourceSelect').addEventListener('change', (e) => send('SRC', e.target.value));
         document.getElementById('modeSelect').addEventListener('change', (e) => send('MODE', e.target.value));
+        
         setup('driveIn', 'DRIVE'); 
+        setup('dbandIn', 'DEAD'); 
         setup('climIn', 'CLIM'); 
         setup('rlimIn', 'RLIM'); 
         setup('mlimIn', 'MLIM');
