@@ -118,9 +118,7 @@ git subtree push --prefix web public main
 
     <script>
         let cmdChar, readChar;
-        // const SERVICE_UUID = 0x1234;
-        // const CMD_UUID = 0x5678;
-        // const READ_UUID = 0x9ABC;
+        
         // Do not use hex integers. Bluefy's Swift bridge requires full strings.
         const SERVICE_UUID = "00001234-0000-1000-8000-00805f9b34fb";
         const CMD_UUID     = "00005678-0000-1000-8000-00805f9b34fb";
@@ -128,9 +126,7 @@ git subtree push --prefix web public main
 
         document.getElementById('connectBtn').addEventListener('click', async () => {
             try {
-                // The Ultimate Bluefy Bypass:
-                // 1. Use acceptAllDevices to bypass Bluefy's broken 'filters' parser.
-                // 2. Use the 128-bit string in optionalServices to bypass the integer-cast crash.
+                // The Ultimate Bluefy Bypass
                 const device = await navigator.bluetooth.requestDevice({
                     acceptAllDevices: true,
                     optionalServices: [SERVICE_UUID] 
@@ -143,7 +139,54 @@ git subtree push --prefix web public main
 
                 await readChar.startNotifications();
                 
-                // ... (Keep the rest of your UI update logic exactly the same) ...
+                // RESTORED LOGIC: Listen for the telemetry string from the ESP32
+                readChar.addEventListener('characteristicvaluechanged', (e) => {
+                    const str = new TextDecoder().decode(e.target.value);
+                    const reports = str.split('|');
+                    
+                    reports.forEach(report => {
+                        if(!report) return;
+
+                        if (report.startsWith('R:')) {
+                            const parts = report.split(':');
+                            const isConnected = parts[1] === '1';
+                            const stateEl = document.getElementById('remState');
+                            stateEl.innerText = isConnected ? "CONNECTED" : "DISCONNECTED";
+                            stateEl.style.color = isConnected ? "#44ff44" : "#ff4444";
+                            document.getElementById('remThrot').innerText = parts[2];
+                            document.getElementById('remTrig').innerText = parts[3] === '1' ? "PULLED" : "OPEN";
+                            document.getElementById('remBtn').innerText = parts[4] === '1' ? "PRESSED" : "OPEN";
+                            return;
+                        }
+
+                        if (report.startsWith('V')) {
+                            const parts = report.split(':');
+                            const id = parts[0].substring(1);
+                            const rpm = parts[1];
+                            const cur = parts[2];
+                            const duty = parts[3];
+                            
+                            // Dynamically build the table if a new VESC ID appears
+                            if(!document.getElementById(`head-${id}`)) {
+                                document.getElementById('idRow').insertAdjacentHTML('beforeend', `<th id="head-${id}">${id}</th>`);
+                                document.getElementById('rpmRow').insertAdjacentHTML('beforeend', `<td id="rpm-${id}" class="val-text">0</td>`);
+                                document.getElementById('curRow').insertAdjacentHTML('beforeend', `<td id="cur-${id}" class="val-text" style="color:#44bbff">0.0</td>`);
+                                document.getElementById('dutyRow').insertAdjacentHTML('beforeend', `<td id="duty-${id}" class="val-text" style="color:#ffbb44">0.0%</td>`);
+                            }
+                            document.getElementById(`rpm-${id}`).innerText = Math.round(rpm);
+                            document.getElementById(`cur-${id}`).innerText = cur;
+                            document.getElementById(`duty-${id}`).innerText = duty + "%";
+                        }
+                    });
+                });
+
+                // RESTORED LOGIC: Unhide the UI elements upon successful connection
+                document.getElementById('status').innerText = "CONNECTED";
+                document.getElementById('status').className = "status connected";
+                document.getElementById('connectBtn').style.display = "none";
+                document.getElementById('remoteDiag').style.display = "block";
+                document.getElementById('controls').style.display = "block";
+                document.getElementById('telemetry').style.display = "block";
 
             } catch (e) { 
                 console.error(e);
