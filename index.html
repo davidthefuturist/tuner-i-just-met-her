@@ -5,7 +5,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "full hex strings attempt 3 fixing Bluefy"
+git commit -m "Attempt 4 fixing Bluefy"
 git subtree push --prefix web public main 
 
 -->
@@ -128,12 +128,12 @@ git subtree push --prefix web public main
 
         document.getElementById('connectBtn').addEventListener('click', async () => {
             try {
+                // The Bluefy Nuclear Option: 
+                // No 'name' filter. No 'optionalServices'. Just the 128-bit string UUID.
                 const device = await navigator.bluetooth.requestDevice({
                     filters: [
-                        { name: "VESC_MASTER" }
-                    ],
-                    // Because SERVICE_UUID is now a valid string, Bluefy will parse this successfully!
-                    optionalServices: [SERVICE_UUID] 
+                        { services: [SERVICE_UUID] }
+                    ]
                 });
                 
                 const server = await device.gatt.connect();
@@ -143,7 +143,7 @@ git subtree push --prefix web public main
 
                 await readChar.startNotifications();
                 
-                // ... (Keep your characteristicvaluechanged logic the same) ...
+                // ... (Keep the rest of your UI update logic exactly the same) ...
 
             } catch (e) { 
                 console.error(e);
