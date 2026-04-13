@@ -5,7 +5,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "Attempt 2 fixing Bluefy"
+git commit -m "full hex strings attempt 3 fixing Bluefy"
 git subtree push --prefix web public main 
 
 -->
@@ -118,20 +118,22 @@ git subtree push --prefix web public main
 
     <script>
         let cmdChar, readChar;
-        const SERVICE_UUID = 0x1234;
-        const CMD_UUID = 0x5678;
-        const READ_UUID = 0x9ABC;
+        // const SERVICE_UUID = 0x1234;
+        // const CMD_UUID = 0x5678;
+        // const READ_UUID = 0x9ABC;
+        // Do not use hex integers. Bluefy's Swift bridge requires full strings.
+        const SERVICE_UUID = "00001234-0000-1000-8000-00805f9b34fb";
+        const CMD_UUID     = "00005678-0000-1000-8000-00805f9b34fb";
+        const READ_UUID    = "00009abc-0000-1000-8000-00805f9b34fb";
 
         document.getElementById('connectBtn').addEventListener('click', async () => {
             try {
-                // Pivot: Filter by the advertised Service UUID instead of the name.
-                // This is the most native way iOS handles BLE scanning in the background.
                 const device = await navigator.bluetooth.requestDevice({
                     filters: [
-                        { services: [SERVICE_UUID] }
-                    ]
-                    // We no longer need optionalServices here because the 
-                    // SERVICE_UUID is already explicitly declared in the filter!
+                        { name: "VESC_MASTER" }
+                    ],
+                    // Because SERVICE_UUID is now a valid string, Bluefy will parse this successfully!
+                    optionalServices: [SERVICE_UUID] 
                 });
                 
                 const server = await device.gatt.connect();
@@ -141,7 +143,7 @@ git subtree push --prefix web public main
 
                 await readChar.startNotifications();
                 
-                // ... (Keep the rest of your characteristicvaluechanged logic exactly the same) ...
+                // ... (Keep your characteristicvaluechanged logic the same) ...
 
             } catch (e) { 
                 console.error(e);
