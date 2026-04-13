@@ -5,7 +5,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "Let's try to fix Bluefy"
+git commit -m "Attempt 2 fixing Bluefy"
 git subtree push --prefix web public main 
 
 -->
@@ -124,14 +124,14 @@ git subtree push --prefix web public main
 
         document.getElementById('connectBtn').addEventListener('click', async () => {
             try {
-                // Drop acceptAllDevices. iOS/Bluefy demands a strict filter.
+                // Pivot: Filter by the advertised Service UUID instead of the name.
+                // This is the most native way iOS handles BLE scanning in the background.
                 const device = await navigator.bluetooth.requestDevice({
                     filters: [
-                        { name: "VESC_MASTER" } 
-                    ],
-                    // We still need optionalServices to access the GATT characteristics 
-                    // since we filtered by name, not by the service UUID.
-                    optionalServices: [SERVICE_UUID] 
+                        { services: [SERVICE_UUID] }
+                    ]
+                    // We no longer need optionalServices here because the 
+                    // SERVICE_UUID is already explicitly declared in the filter!
                 });
                 
                 const server = await device.gatt.connect();
@@ -144,7 +144,6 @@ git subtree push --prefix web public main
                 // ... (Keep the rest of your characteristicvaluechanged logic exactly the same) ...
 
             } catch (e) { 
-                // Better error handling for iOS wrappers that throw raw objects/numbers
                 console.error(e);
                 const errorMsg = e.message ? e.message : (e === 2 ? "Error 2: Bluefy rejected the Bluetooth parameters." : e);
                 alert(`Connection Failed: ${errorMsg}`); 
