@@ -5,7 +5,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "Attempt 4 fixing Bluefy"
+git commit -m "Attempt 5 fixing Bluefy"
 git subtree push --prefix web public main 
 
 -->
@@ -128,12 +128,12 @@ git subtree push --prefix web public main
 
         document.getElementById('connectBtn').addEventListener('click', async () => {
             try {
-                // The Bluefy Nuclear Option: 
-                // No 'name' filter. No 'optionalServices'. Just the 128-bit string UUID.
+                // The Ultimate Bluefy Bypass:
+                // 1. Use acceptAllDevices to bypass Bluefy's broken 'filters' parser.
+                // 2. Use the 128-bit string in optionalServices to bypass the integer-cast crash.
                 const device = await navigator.bluetooth.requestDevice({
-                    filters: [
-                        { services: [SERVICE_UUID] }
-                    ]
+                    acceptAllDevices: true,
+                    optionalServices: [SERVICE_UUID] 
                 });
                 
                 const server = await device.gatt.connect();
