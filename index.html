@@ -5,7 +5,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "Remote UI first attempt"
+git commit -m "Let's try to fix Bluefy"
 git subtree push --prefix web public main 
 
 -->
@@ -124,67 +124,31 @@ git subtree push --prefix web public main
 
         document.getElementById('connectBtn').addEventListener('click', async () => {
             try {
+                // Drop acceptAllDevices. iOS/Bluefy demands a strict filter.
                 const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: [SERVICE_UUID]
+                    filters: [
+                        { name: "VESC_MASTER" } 
+                    ],
+                    // We still need optionalServices to access the GATT characteristics 
+                    // since we filtered by name, not by the service UUID.
+                    optionalServices: [SERVICE_UUID] 
                 });
+                
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(SERVICE_UUID);
                 cmdChar = await service.getCharacteristic(CMD_UUID);
                 readChar = await service.getCharacteristic(READ_UUID);
 
                 await readChar.startNotifications();
-                readChar.addEventListener('characteristicvaluechanged', (e) => {
-                    const str = new TextDecoder().decode(e.target.value);
-                    const reports = str.split('|');
-                    
-                    reports.forEach(report => {
-                        if(!report) return;
+                
+                // ... (Keep the rest of your characteristicvaluechanged logic exactly the same) ...
 
-                        // Parse Remote Diagnostics String (R:connected:throttle:trigger:button)
-                        if (report.startsWith('R:')) {
-                            const parts = report.split(':');
-                            const isConnected = parts[1] === '1';
-                            
-                            const stateEl = document.getElementById('remState');
-                            stateEl.innerText = isConnected ? "CONNECTED" : "DISCONNECTED";
-                            stateEl.style.color = isConnected ? "#44ff44" : "#ff4444";
-                            
-                            document.getElementById('remThrot').innerText = parts[2];
-                            document.getElementById('remTrig').innerText = parts[3] === '1' ? "PULLED" : "OPEN";
-                            document.getElementById('remBtn').innerText = parts[4] === '1' ? "PRESSED" : "OPEN";
-                            return;
-                        }
-
-                        // Parse VESC Fleet String (V<id>:rpm:cur:duty)
-                        if (report.startsWith('V')) {
-                            const parts = report.split(':');
-                            const id = parts[0].substring(1);
-                            const rpm = parts[1];
-                            const cur = parts[2];
-                            const duty = parts[3];
-                            
-                            if(!document.getElementById(`head-${id}`)) {
-                                document.getElementById('idRow').insertAdjacentHTML('beforeend', `<th id="head-${id}">${id}</th>`);
-                                document.getElementById('rpmRow').insertAdjacentHTML('beforeend', `<td id="rpm-${id}" class="val-text">0</td>`);
-                                document.getElementById('curRow').insertAdjacentHTML('beforeend', `<td id="cur-${id}" class="val-text" style="color:#44bbff">0.0</td>`);
-                                document.getElementById('dutyRow').insertAdjacentHTML('beforeend', `<td id="duty-${id}" class="val-text" style="color:#ffbb44">0.0%</td>`);
-                            }
-                            
-                            document.getElementById(`rpm-${id}`).innerText = Math.round(rpm);
-                            document.getElementById(`cur-${id}`).innerText = cur;
-                            document.getElementById(`duty-${id}`).innerText = duty + "%";
-                        }
-                    });
-                });
-
-                document.getElementById('status').innerText = "CONNECTED";
-                document.getElementById('status').className = "status connected";
-                document.getElementById('connectBtn').style.display = "none";
-                document.getElementById('remoteDiag').style.display = "block";
-                document.getElementById('controls').style.display = "block";
-                document.getElementById('telemetry').style.display = "block";
-            } catch (e) { alert(e); }
+            } catch (e) { 
+                // Better error handling for iOS wrappers that throw raw objects/numbers
+                console.error(e);
+                const errorMsg = e.message ? e.message : (e === 2 ? "Error 2: Bluefy rejected the Bluetooth parameters." : e);
+                alert(`Connection Failed: ${errorMsg}`); 
+            }
         });
 
         async function send(type, val) {
