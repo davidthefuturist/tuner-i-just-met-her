@@ -66,6 +66,15 @@ git subtree push --prefix web public main
             <div class="diag-item">Main Button: <span id="remBtn" class="diag-val">OPEN</span></div>
         </div>
 
+        <div id="latencyDiag" class="diag-box" style="display:none;">
+            <h3>BLE → CAN Latency (µs)</h3>
+            <div class="diag-item">Min: <span id="latMin" class="diag-val">--</span></div>
+            <div class="diag-item">Max: <span id="latMax" class="diag-val" style="color:#ff8844;">--</span></div>
+            <div class="diag-item">Avg: <span id="latAvg" class="diag-val" style="color:#44bbff;">--</span></div>
+            <div class="diag-item">Samples: <span id="latCount" class="diag-val">0</span></div>
+            <button class="btn" id="latResetBtn" style="background:#444; color:#fff; margin-top:10px;">RESET STATS</button>
+        </div>
+
         <div id="telemetry" style="display:none; overflow-x: auto;">
             <table>
                 <tr id="idRow"><td class="metric-label">VESC ID</td></tr>
@@ -159,6 +168,15 @@ git subtree push --prefix web public main
                             return;
                         }
 
+                        if (report.startsWith('L:')) {
+                            const parts = report.split(':');
+                            document.getElementById('latMin').innerText = parts[1];
+                            document.getElementById('latMax').innerText = parts[2];
+                            document.getElementById('latAvg').innerText = parts[3];
+                            document.getElementById('latCount').innerText = parts[4];
+                            return;
+                        }
+
                         if (report.startsWith('V')) {
                             const parts = report.split(':');
                             const id = parts[0].substring(1);
@@ -185,6 +203,7 @@ git subtree push --prefix web public main
                 document.getElementById('status').className = "status connected";
                 document.getElementById('connectBtn').style.display = "none";
                 document.getElementById('remoteDiag').style.display = "block";
+                document.getElementById('latencyDiag').style.display = "block";
                 document.getElementById('controls').style.display = "block";
                 document.getElementById('telemetry').style.display = "block";
 
@@ -222,6 +241,8 @@ git subtree push --prefix web public main
             document.getElementById('driveIn').value = 0; 
             send('DRIVE', 0); 
         });
+
+        document.getElementById('latResetBtn').addEventListener('click', () => send('LRST', 0));
     </script>
 </body>
 </html>
