@@ -76,6 +76,12 @@ git subtree push --prefix web public main
                 <span style="color:#888; font-size:11px;">Wall-Clock (UTC):</span>
                 <span class="diag-val" id="latWallClock" style="font-size:12px; color:#ffff44;">--</span>
             </div>
+            <div class="diag-item">Min: <span id="latMin" class="diag-val">--</span></div>
+            <div class="diag-item">Max: <span id="latMax" class="diag-val" style="color:#ff8844;">--</span></div>
+            <div class="diag-item">Avg: <span id="latAvg" class="diag-val" style="color:#44bbff;">--</span></div>
+            <div class="diag-item">Samples: <span id="latCount" class="diag-val">0</span></div>
+            <button class="btn" id="latResetBtn" style="background:#444; color:#fff; margin-top:10px;">RESET STATS</button>
+        </div>
 
         <div id="telemetry" style="display:none; overflow-x: auto;">
             <table>
