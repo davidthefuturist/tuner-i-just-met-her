@@ -67,7 +67,7 @@ git subtree push --prefix web public main
         </div>
 
         <div id="latencyDiag" class="diag-box" style="display:none;">
-            <h3>BLE → CAN Latency (µs)</h3>
+            <h3>BLE → CAN Latency (microseconds)</h3>
             <div class="diag-item" style="flex-direction:column; align-items:flex-start; border-bottom:1px solid #333; padding-bottom:8px; margin-bottom:8px;">
                 <span style="color:#888; font-size:11px;">Δ (last sample):</span>
                 <span class="diag-val" id="latDelta" style="font-size:13px; color:#ffff44;">-- µs</span>
@@ -80,9 +80,9 @@ git subtree push --prefix web public main
                 <span style="color:#888; font-size:11px;">Wall-Clock (UTC):</span>
                 <span class="diag-val" id="latWallClock" style="font-size:12px; color:#ffff44;">--</span>
             </div>
-            <div class="diag-item">Min: <span id="latMin" class="diag-val">--</span></div>
-            <div class="diag-item">Max: <span id="latMax" class="diag-val" style="color:#ff8844;">--</span></div>
-            <div class="diag-item">Avg: <span id="latAvg" class="diag-val" style="color:#44bbff;">--</span></div>
+            <div class="diag-item">Min: (µs) <span id="latMin" class="diag-val">-- </span></div>
+            <div class="diag-item">Max: (µs) <span id="latMax" class="diag-val" style="color:#ff8844;">--</span></div>
+            <div class="diag-item">Avg: (µs) <span id="latAvg" class="diag-val" style="color:#44bbff;">--</span></div>
             <div class="diag-item">Samples: <span id="latCount" class="diag-val">0</span></div>
             <button class="btn" id="latResetBtn" style="background:#444; color:#fff; margin-top:10px;">RESET STATS</button>
         </div>
