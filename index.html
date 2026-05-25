@@ -5,8 +5,8 @@
 SAVE THEN:
 
 git add web
-git commit -m "verbose timestamps to t0 and t2 in web interface"
-git subtree push --prefix web public main 
+git commit -m "OTA Attempt 1"
+git subtree push --force --prefix web public main 
 
 -->
 
@@ -70,7 +70,6 @@ git subtree push --prefix web public main
         .ota-state-pill.verifying{ background: #ffaa00; color: #000; }
         .ota-state-pill.error    { background: #ff4444; color: #fff; }
         .ota-state-pill.idle     { background: #333;    color: #888; }
-        
 
         /* --- PHOTO GALLERY --- */
         .photo-strip {
@@ -228,7 +227,7 @@ git subtree push --prefix web public main
             </div>
             <div id="latCopyStatus" style="font-size:11px; color:#44ff44; margin-top:6px; min-height:14px; text-align:center;"></div>
         </div>
-        
+
         <!-- ============ FIRMWARE UPDATE (OTA) ============ -->
         <!-- Outside .lockable: OTA must work even when ride controls are locked. -->
         <div id="otaBox" class="diag-box" style="display:none;">
@@ -403,27 +402,29 @@ git subtree push --prefix web public main
         // --- LOCK STATE ---
         let isLocked = false;
 
+        // --- OTA STATE ---
+        // The selected file's parsed header and full bytes, populated once SELECT is tapped
+        // and the header is validated against the device's reported PID.
+        let otaSelected = null;       // { file, name, headerBytes, payloadBytes, headerObj }
+        let otaUploading = false;
+        let otaAbortFlag = false;     // set by user during upload to bail out
+        // Most-recent device PID/FW reported via the O: telemetry packet
+        let devicePid = null;
+        let deviceFw  = null;
 
-
-        // // Cache of most recent VESC fleet readings, keyed by VESC ID.
-        // // Populated on every 'V' packet, drained by the Copy Stats button.
-        // const lastVescSnapshot = {};
+        // Magic number must match build_ota_image.py and OTA_HEADER_MAGIC in main.c
+        const OTA_MAGIC = 0x56455343;        // 'VESC' little-endian
+        const OTA_HEADER_SIZE = 16;
+        // Chunk size for BLE OTA upload. ESP32-C3 negotiates ~244-byte MTU with most
+        // clients; sending 200 leaves comfortable headroom for ATT/L2CAP overhead and
+        // works on iOS Safari/Bluefy which is more conservative than Chrome.
+        const OTA_CHUNK_SIZE = 200;
         
         // Do not use hex integers. Bluefy's Swift bridge requires full strings.
         const SERVICE_UUID = "00001234-0000-1000-8000-00805f9b34fb";
         const CMD_UUID     = "00005678-0000-1000-8000-00805f9b34fb";
         const READ_UUID    = "00009abc-0000-1000-8000-00805f9b34fb";
         const OTA_UUID     = "0000def0-0000-1000-8000-00805f9b34fb";
-
-        // --- OTA STATE ---
-        let otaSelected = null;
-        let otaUploading = false;
-        let otaAbortFlag = false;
-        let devicePid = null;
-        let deviceFw  = null;
-        const OTA_MAGIC = 0x56455343;   // 'VESC' LE — matches firmware & build script
-        const OTA_HEADER_SIZE = 16;
-        const OTA_CHUNK_SIZE = 200;     // drop to 100 if you see crc_mismatch on iOS
 
         document.getElementById('connectBtn').addEventListener('click', async () => {
             try {
@@ -437,10 +438,11 @@ git subtree push --prefix web public main
                 const service = await server.getPrimaryService(SERVICE_UUID);
                 cmdChar = await service.getCharacteristic(CMD_UUID);
                 readChar = await service.getCharacteristic(READ_UUID);
+                // OTA characteristic — may not exist on older firmware; tolerate missing.
                 try {
                     otaChar = await service.getCharacteristic(OTA_UUID);
                 } catch (e) {
-                    console.warn('OTA characteristic not found (older firmware?). OTA disabled.');
+                    console.warn('OTA characteristic not available on this device (older firmware?). OTA disabled.');
                     otaChar = null;
                 }
 
@@ -525,6 +527,39 @@ git subtree push --prefix web public main
                             return;
                         }
 
+                        // OTA status: O:state:received:total:product_id:fw_version:last_error
+                        if (report.startsWith('O:')) {
+                            const parts = report.split(':');
+                            if (parts.length < 7) return;
+                            const state    = parseInt(parts[1], 10);
+                            const received = parseInt(parts[2], 10);
+                            const total    = parseInt(parts[3], 10);
+                            const pid      = parseInt(parts[4], 10);
+                            const fw       = parseInt(parts[5], 10);
+                            const lastErr  = parts[6];
+
+                            devicePid = pid;
+                            deviceFw  = fw;
+                            document.getElementById('otaDevPid').innerText = pid;
+                            document.getElementById('otaDevFw').innerText  = fw;
+
+                            const pill = document.getElementById('otaStatePill');
+                            pill.className = 'ota-state-pill';
+                            const stateNames = ['IDLE','RX HEADER','RX PAYLOAD','VERIFYING','ERROR'];
+                            pill.innerText = stateNames[state] || `STATE ${state}`;
+                            if (state === 0) pill.classList.add('idle');
+                            else if (state === 4) pill.classList.add('error');
+                            else if (state === 3) pill.classList.add('verifying');
+                            else pill.classList.add('active');
+
+                            // Surface device-side errors in the status line
+                            if (state === 4 && lastErr && lastErr !== '-') {
+                                document.getElementById('otaStatus').style.color = '#ff4444';
+                                document.getElementById('otaStatus').innerText = `Device error: ${lastErr}`;
+                            }
+                            return;
+                        }
+
                         if (report.startsWith('V')) {
                             const parts = report.split(':');
                             const id = parts[0].substring(1);
@@ -560,6 +595,7 @@ git subtree push --prefix web public main
                 document.getElementById('controls').style.display = "block";
                 document.getElementById('telemetry').style.display = "block";
                 document.getElementById('lockBar').style.display = "block";
+                // Show OTA box only if the OTA characteristic was found
                 if (otaChar) document.getElementById('otaBox').style.display = "block";
 
                 // Sync ESP32's wall clock to the browser's current Unix time (UTC seconds)
@@ -664,7 +700,8 @@ git subtree push --prefix web public main
                     'raw_throttle',
                     'vesc1_id','vesc1_erpm','vesc1_current','vesc1_duty',
                     'vesc2_id','vesc2_erpm','vesc2_current','vesc2_duty',
-                    'latitude','longitude','altitude'
+                    'latitude','longitude','altitude',
+                    'device_pid','device_fw'
                 ].join('\t');
 
                 const tsvRow = [
@@ -673,7 +710,8 @@ git subtree push --prefix web public main
                     rawThrottleVal,
                     v1id, v1?.erpm ?? '', v1?.current ?? '', v1?.duty ?? '',
                     v2id, v2?.erpm ?? '', v2?.current ?? '', v2?.duty ?? '',
-                    currentLat, currentLon, currentAlt
+                    currentLat, currentLon, currentAlt,
+                    devicePid ?? '', deviceFw ?? ''
                 ].join('\t');
 
                 const noteLine = (typeof noteOverride === 'string')
@@ -693,7 +731,8 @@ git subtree push --prefix web public main
                     `t2 (CAN dispatch):    ${s.t2_wall ?? 'n/a'}`,
                     `Wall clock at sample: ${s.wall_now ?? 'n/a'}`,
                     `GPS:                  ${currentLat ? `${currentLat}, ${currentLon} (Alt: ${currentAlt}m)` : 'Acquiring...'}`,
-                    `Drive Input:         ${rawThrottleVal}`,
+                    `Drive Input:          ${rawThrottleVal}`,
+                    `Device PID / FW:      ${devicePid ?? '?'} / v${deviceFw ?? '?'}`,
                     `VESC 1:               ${v1id ? `id=${v1id} erpm=${v1.erpm} I=${v1.current}A duty=${v1.duty}%` : 'none'}`,
                     `VESC 2:               ${v2id ? `id=${v2id} erpm=${v2.erpm} I=${v2.current}A duty=${v2.duty}%` : 'none'}`,
                     ``,
@@ -791,6 +830,220 @@ git subtree push --prefix web public main
                 stEl.innerText = 'Stopped';
                 document.body.classList.remove('autolog-active');
             }
+        });
+
+        // ============================================================
+        // ============ OTA FIRMWARE UPDATE ============
+        // ============================================================
+        // Flow:
+        //   1. User picks a .ota.bin file produced by build_ota_image.py.
+        //   2. JS reads the first 16 bytes, validates magic, displays metadata
+        //      (PID, version, payload size, CRC32) AND compares PID against the
+        //      device's reported PID. Mismatch → upload is blocked client-side.
+        //   3. JS computes CRC32 of the payload to confirm the file isn't corrupted
+        //      on the client end before wasting BLE bandwidth.
+        //   4. On UPLOAD: send OTA:START:<total_size> over CMD, then stream the
+        //      entire file (header + payload) in OTA_CHUNK_SIZE blocks over the
+        //      OTA characteristic, then OTA:END:<crc32> to finalize.
+
+        const otaPickBtn       = document.getElementById('otaPickBtn');
+        const otaUploadBtn     = document.getElementById('otaUploadBtn');
+        const otaAbortBtn      = document.getElementById('otaAbortBtn');
+        const otaFileInput     = document.getElementById('otaFileInput');
+        const otaStatus        = document.getElementById('otaStatus');
+        const otaFileInfo      = document.getElementById('otaFileInfo');
+        const otaProgressWrap  = document.getElementById('otaProgressWrap');
+        const otaProgressBar   = document.getElementById('otaProgressBar');
+        const otaProgressLabel = document.getElementById('otaProgressLabel');
+
+        function otaSetStatus(msg, color) {
+            otaStatus.style.color = color || '#888';
+            otaStatus.innerText = msg;
+        }
+
+        // CRC32 (IEEE 802.3 polynomial, same as zlib.crc32 and ESP-IDF's esp_crc32_le).
+        // We compute it client-side to (a) sanity-check the file before upload and
+        // (b) send it in OTA:END so the device can confirm what it received matches
+        // what we sent. Table-driven for speed; a 1 MB firmware CRCs in tens of ms.
+        const CRC32_TABLE = (() => {
+            const t = new Uint32Array(256);
+            for (let i = 0; i < 256; i++) {
+                let c = i;
+                for (let k = 0; k < 8; k++) {
+                    c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+                }
+                t[i] = c >>> 0;
+            }
+            return t;
+        })();
+        function crc32(bytes) {
+            let c = 0xFFFFFFFF;
+            for (let i = 0; i < bytes.length; i++) {
+                c = CRC32_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+            }
+            return (c ^ 0xFFFFFFFF) >>> 0;
+        }
+
+        otaPickBtn.addEventListener('click', () => otaFileInput.click());
+
+        otaFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files && e.target.files[0];
+            otaFileInput.value = '';  // reset so re-picking same file fires 'change'
+            if (!file) return;
+
+            otaFileInfo.style.display = 'flex';
+            document.getElementById('otaFileName').innerText = file.name;
+
+            // Read entire file into memory. ESP32-C3 firmware is well under 2MB, comfortably
+            // fits in browser memory even on phones.
+            const buf = await file.arrayBuffer();
+            const bytes = new Uint8Array(buf);
+
+            if (bytes.length < OTA_HEADER_SIZE) {
+                document.getElementById('otaFileVerdict').innerText = '❌ File too small to be a valid OTA image';
+                document.getElementById('otaFileVerdict').style.color = '#ff4444';
+                otaUploadBtn.style.display = 'none';
+                return;
+            }
+
+            // Parse 16-byte little-endian header
+            const dv = new DataView(buf, 0, OTA_HEADER_SIZE);
+            const magic   = dv.getUint32(0,  true);
+            const pid     = dv.getUint32(4,  true);
+            const version = dv.getUint32(8,  true);
+            const hdrCrc  = dv.getUint32(12, true);
+
+            const payload = bytes.subarray(OTA_HEADER_SIZE);
+            const computedCrc = crc32(payload);
+
+            document.getElementById('otaFileMagic').innerText = '0x' + magic.toString(16).toUpperCase().padStart(8,'0');
+            document.getElementById('otaFilePid').innerText   = pid;
+            document.getElementById('otaFileVer').innerText   = 'v' + version;
+            document.getElementById('otaFileSize').innerText  = `${payload.length.toLocaleString()} B`;
+            document.getElementById('otaFileCrc').innerText   = '0x' + computedCrc.toString(16).toUpperCase().padStart(8,'0');
+
+            // --- VALIDATE CLIENT-SIDE ---
+            const verdictEl = document.getElementById('otaFileVerdict');
+            const issues = [];
+            if (magic !== OTA_MAGIC)            issues.push(`Bad magic (expected 0x${OTA_MAGIC.toString(16).toUpperCase()})`);
+            if (hdrCrc !== computedCrc)         issues.push('Header CRC32 does not match payload — file corrupt');
+            if (devicePid !== null && pid !== devicePid) {
+                issues.push(`Product ID mismatch: file=${pid} device=${devicePid}`);
+            }
+
+            if (issues.length) {
+                verdictEl.innerText = '❌ ' + issues.join(' | ');
+                verdictEl.style.color = '#ff4444';
+                otaUploadBtn.style.display = 'none';
+                otaSelected = null;
+                return;
+            }
+
+            verdictEl.innerText = '✓ Image looks valid for this device';
+            verdictEl.style.color = '#44ff44';
+            otaUploadBtn.style.display = 'block';
+
+            otaSelected = {
+                file,
+                name: file.name,
+                allBytes: bytes,
+                payloadBytes: payload,
+                headerObj: { magic, pid, version, hdrCrc, computedCrc }
+            };
+            otaSetStatus('Ready to upload. Make sure motors are stopped.', '#888');
+        });
+
+        otaUploadBtn.addEventListener('click', async () => {
+            if (!otaSelected || !otaChar || otaUploading) return;
+
+            // Final guardrail: warn if the trigger is currently pulled.
+            const trigEl = document.getElementById('remTrig');
+            if (trigEl && trigEl.innerText === 'PULLED') {
+                if (!confirm('⚠️ Trigger is currently PULLED. Release it before flashing. Continue anyway?')) {
+                    return;
+                }
+            }
+
+            otaUploading = true;
+            otaAbortFlag = false;
+            otaUploadBtn.style.display = 'none';
+            otaPickBtn.style.display   = 'none';
+            otaAbortBtn.style.display  = 'block';
+            otaProgressWrap.style.display = 'block';
+            otaProgressBar.style.width = '0%';
+
+            const totalBytes = otaSelected.allBytes.length;
+            const payloadCrc = otaSelected.headerObj.computedCrc;
+
+            try {
+                // 1. Tell the device to begin a session.
+                otaSetStatus('Starting session…', '#44bbff');
+                await cmdChar.writeValue(new TextEncoder().encode(`OTA:START:${totalBytes}`));
+
+                // Brief settle so the device can erase the partition before we flood it.
+                // esp_ota_begin() with OTA_SIZE_UNKNOWN triggers a full partition erase
+                // (~few hundred ms for 1MB). Starting writes before that finishes would
+                // result in flash-busy errors.
+                await new Promise(r => setTimeout(r, 500));
+
+                // 2. Stream chunks.
+                const t0 = performance.now();
+                let sent = 0;
+                while (sent < totalBytes) {
+                    if (otaAbortFlag) {
+                        await cmdChar.writeValue(new TextEncoder().encode('OTA:ABORT:0'));
+                        otaSetStatus('Aborted by user.', '#ff8844');
+                        throw new Error('aborted');
+                    }
+                    const end = Math.min(sent + OTA_CHUNK_SIZE, totalBytes);
+                    const chunk = otaSelected.allBytes.subarray(sent, end);
+
+                    // writeValueWithoutResponse is dramatically faster than the
+                    // confirmed write — we rely on TCP-like reliability of BLE
+                    // L2CAP and the device-side CRC check to catch any drops.
+                    if (otaChar.writeValueWithoutResponse) {
+                        await otaChar.writeValueWithoutResponse(chunk);
+                    } else {
+                        await otaChar.writeValue(chunk);
+                    }
+
+                    sent = end;
+
+                    // Update UI roughly every 16 chunks (~3.2 KB) to avoid layout thrash.
+                    if ((sent % (OTA_CHUNK_SIZE * 16)) === 0 || sent === totalBytes) {
+                        const pct = (sent / totalBytes) * 100;
+                        otaProgressBar.style.width = pct.toFixed(1) + '%';
+                        const elapsedS = (performance.now() - t0) / 1000;
+                        const rateKBs  = (sent / 1024 / elapsedS).toFixed(1);
+                        otaProgressLabel.innerText =
+                            `${(sent/1024).toFixed(1)} / ${(totalBytes/1024).toFixed(1)} KB · ${rateKBs} KB/s`;
+                    }
+                }
+
+                // 3. Finalize.
+                otaSetStatus('Finalizing — device is verifying & rebooting…', '#ffaa00');
+                await cmdChar.writeValue(new TextEncoder().encode(`OTA:END:${payloadCrc}`));
+
+                // The device reboots ~1s after a successful OTA:END. BLE will disconnect.
+                // Don't expect any further telemetry; let the user reconnect manually.
+                otaSetStatus('✓ Upload complete. Device rebooting. Reconnect when ready.', '#44ff44');
+                otaProgressLabel.innerText = `${(totalBytes/1024).toFixed(1)} KB sent`;
+            } catch (err) {
+                console.error('OTA upload failed:', err);
+                otaSetStatus(`Upload failed: ${err.message || err}`, '#ff4444');
+                try { await cmdChar.writeValue(new TextEncoder().encode('OTA:ABORT:0')); } catch(_) {}
+            } finally {
+                otaUploading = false;
+                otaAbortBtn.style.display  = 'none';
+                otaPickBtn.style.display   = 'block';
+                // Don't re-show upload button after a complete upload — the device is gone.
+            }
+        });
+
+        otaAbortBtn.addEventListener('click', () => {
+            if (!otaUploading) return;
+            if (!confirm('Abort the OTA upload? The partial flash will be discarded.')) return;
+            otaAbortFlag = true;
         });
 
         // ============================================================
