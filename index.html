@@ -6,7 +6,7 @@ SAVE THEN:
 
 git add web
 git commit -m "OTA Attempt 1"
-git subtree push --prefix web public main 
+git subtree push --prefix web public main --force
 
 -->
 
@@ -1001,11 +1001,7 @@ git subtree push --prefix web public main
                     // writeValueWithoutResponse is dramatically faster than the
                     // confirmed write — we rely on TCP-like reliability of BLE
                     // L2CAP and the device-side CRC check to catch any drops.
-                    if (otaChar.writeValueWithoutResponse) {
-                        await otaChar.writeValueWithoutResponse(chunk);
-                    } else {
-                        await otaChar.writeValue(chunk);
-                    }
+                    await otaChar.writeValue(chunk);
 
                     sent = end;
 
