@@ -51,6 +51,25 @@ git subtree push --prefix web public main
         .btn { width: 100%; padding: 16px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 10px; }
         .connect-btn { background: #44ff44; color: #000; }
         .stop-btn { background: #ff4444; color: #fff; font-size: 20px; margin-top: 20px; }
+
+        /* --- OTA SECTION --- */
+        .ota-progress-wrap {
+            width: 100%; height: 14px; background: #000; border-radius: 7px;
+            margin-top: 8px; overflow: hidden; border: 1px solid #333;
+        }
+        .ota-progress-bar {
+            height: 100%; width: 0%; background: linear-gradient(90deg, #44bbff, #44ff44);
+            transition: width 0.15s linear;
+        }
+        .ota-state-pill {
+            display: inline-block; padding: 3px 10px; border-radius: 12px;
+            font-size: 11px; font-weight: bold; letter-spacing: 0.5px;
+            background: #333; color: #aaa;
+        }
+        .ota-state-pill.active   { background: #44bbff; color: #000; }
+        .ota-state-pill.verifying{ background: #ffaa00; color: #000; }
+        .ota-state-pill.error    { background: #ff4444; color: #fff; }
+        .ota-state-pill.idle     { background: #333;    color: #888; }
         
 
         /* --- PHOTO GALLERY --- */
@@ -209,6 +228,44 @@ git subtree push --prefix web public main
             </div>
             <div id="latCopyStatus" style="font-size:11px; color:#44ff44; margin-top:6px; min-height:14px; text-align:center;"></div>
         </div>
+        
+        <!-- ============ FIRMWARE UPDATE (OTA) ============ -->
+        <!-- Outside .lockable: OTA must work even when ride controls are locked. -->
+        <div id="otaBox" class="diag-box" style="display:none;">
+            <h3>Firmware Update (OTA)</h3>
+            <div class="diag-item">Device State:
+                <span id="otaStatePill" class="ota-state-pill idle">IDLE</span>
+            </div>
+            <div class="diag-item">Device PID: <span id="otaDevPid" class="diag-val">--</span></div>
+            <div class="diag-item">Device FW v: <span id="otaDevFw"  class="diag-val">--</span></div>
+
+            <div id="otaFileInfo" class="diag-item" style="flex-direction:column; align-items:flex-start; margin-top:12px; border-top:1px solid #333; padding-top:10px; display:none;">
+                <span style="color:#888; font-size:11px;">Selected image:</span>
+                <span id="otaFileName" class="diag-val" style="font-size:12px; word-break:break-all;">--</span>
+                <div style="margin-top:6px; font-size:11px; color:#888;">
+                    Magic: <span id="otaFileMagic" class="diag-val" style="font-size:11px;">--</span>
+                    &nbsp;|&nbsp; PID: <span id="otaFilePid" class="diag-val" style="font-size:11px;">--</span>
+                    &nbsp;|&nbsp; FW: <span id="otaFileVer" class="diag-val" style="font-size:11px;">--</span>
+                </div>
+                <div style="margin-top:4px; font-size:11px; color:#888;">
+                    Payload: <span id="otaFileSize" class="diag-val" style="font-size:11px;">-- B</span>
+                    &nbsp;|&nbsp; CRC32: <span id="otaFileCrc" class="diag-val" style="font-size:11px;">--</span>
+                </div>
+                <div id="otaFileVerdict" style="margin-top:6px; font-size:12px; font-weight:bold;"></div>
+            </div>
+
+            <div id="otaProgressWrap" class="ota-progress-wrap" style="margin-top:12px; display:none;">
+                <div id="otaProgressBar" class="ota-progress-bar"></div>
+            </div>
+            <div id="otaProgressLabel" style="font-size:11px; color:#888; margin-top:4px; text-align:center; min-height:14px;"></div>
+
+            <input type="file" id="otaFileInput" accept=".bin" style="display:none;">
+            <button id="otaPickBtn"   class="btn" style="background:#44bbff; color:#000;">SELECT .OTA.BIN FILE</button>
+            <button id="otaUploadBtn" class="btn" style="background:#44ff44; color:#000; display:none;">UPLOAD &amp; FLASH</button>
+            <button id="otaAbortBtn"  class="btn" style="background:#ff4444; color:#fff; display:none;">ABORT</button>
+
+            <div id="otaStatus" style="font-size:11px; color:#888; margin-top:8px; min-height:14px; text-align:center;">No file selected</div>
+        </div>
 
         <div id="autoLogBox" class="diag-box lockable" style="display:none;">
             <h3>Auto-Log to Sheet</h3>
@@ -315,7 +372,7 @@ git subtree push --prefix web public main
     </div>
 
     <script>
-        let cmdChar, readChar;
+        let cmdChar, readChar, otaChar;
 
         // Cache of most recent latency snapshot, populated on every 'L:' packet.
         // Used by the Copy Stats button to dump a clean report.
@@ -356,6 +413,17 @@ git subtree push --prefix web public main
         const SERVICE_UUID = "00001234-0000-1000-8000-00805f9b34fb";
         const CMD_UUID     = "00005678-0000-1000-8000-00805f9b34fb";
         const READ_UUID    = "00009abc-0000-1000-8000-00805f9b34fb";
+        const OTA_UUID     = "0000def0-0000-1000-8000-00805f9b34fb";
+
+        // --- OTA STATE ---
+        let otaSelected = null;
+        let otaUploading = false;
+        let otaAbortFlag = false;
+        let devicePid = null;
+        let deviceFw  = null;
+        const OTA_MAGIC = 0x56455343;   // 'VESC' LE — matches firmware & build script
+        const OTA_HEADER_SIZE = 16;
+        const OTA_CHUNK_SIZE = 200;     // drop to 100 if you see crc_mismatch on iOS
 
         document.getElementById('connectBtn').addEventListener('click', async () => {
             try {
@@ -369,6 +437,12 @@ git subtree push --prefix web public main
                 const service = await server.getPrimaryService(SERVICE_UUID);
                 cmdChar = await service.getCharacteristic(CMD_UUID);
                 readChar = await service.getCharacteristic(READ_UUID);
+                try {
+                    otaChar = await service.getCharacteristic(OTA_UUID);
+                } catch (e) {
+                    console.warn('OTA characteristic not found (older firmware?). OTA disabled.');
+                    otaChar = null;
+                }
 
                 await readChar.startNotifications();
                 
@@ -486,6 +560,7 @@ git subtree push --prefix web public main
                 document.getElementById('controls').style.display = "block";
                 document.getElementById('telemetry').style.display = "block";
                 document.getElementById('lockBar').style.display = "block";
+                if (otaChar) document.getElementById('otaBox').style.display = "block";
 
                 // Sync ESP32's wall clock to the browser's current Unix time (UTC seconds)
                 const nowUnixSec = Math.floor(Date.now() / 1000);
