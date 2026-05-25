@@ -21,7 +21,7 @@ git subtree push --prefix web public main
     <title>VESC Fleet Tuner</title>
     <style>
         body { font-family: -apple-system, sans-serif; background: #121212; color: #fff; padding: 20px; text-align: center; }
-        .container { max-width: 500px; margin: auto; border: 1px solid #333; padding: 20px; border-radius: 15px; background: #1a1a1a; }
+        .container { max-width: 500px; margin: auto; border: 1px solid #333; padding: 20px; border-radius: 15px; background: #1a1a1a; position: relative; }
         .status { padding: 10px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #ff4444; color: #ff4444; font-size: 12px; font-weight: bold; }
         .connected { border-color: #44ff44; color: #44ff44; }
         
@@ -51,6 +51,121 @@ git subtree push --prefix web public main
         .btn { width: 100%; padding: 16px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 10px; }
         .connect-btn { background: #44ff44; color: #000; }
         .stop-btn { background: #ff4444; color: #fff; font-size: 20px; margin-top: 20px; }
+        
+
+        /* --- PHOTO GALLERY --- */
+        .photo-strip {
+            display: flex; gap: 8px; overflow-x: auto; padding: 8px 0;
+            -webkit-overflow-scrolling: touch;
+        }
+        .photo-strip::-webkit-scrollbar { height: 6px; }
+        .photo-strip::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+        .photo-thumb {
+            flex: 0 0 auto; width: 80px; height: 80px; border-radius: 8px;
+            background-size: cover; background-position: center;
+            border: 2px solid #333; cursor: pointer; position: relative;
+        }
+        .photo-thumb.uploaded { border-color: #44ff44; }
+        .photo-thumb .badge {
+            position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.7);
+            color: #44ff44; font-size: 9px; padding: 1px 4px; border-radius: 3px;
+            font-weight: bold;
+        }
+        .photo-empty {
+            color: #666; font-size: 12px; text-align: center; padding: 20px 0;
+            font-style: italic;
+        }
+        .add-photo-btn {
+            background: #444; color: #fff; padding: 10px; font-size: 13px;
+            border-radius: 8px; border: 1px dashed #666; width: 100%;
+            margin-top: 8px; cursor: pointer; font-weight: bold;
+        }
+
+        /* --- PHOTO VIEWER MODAL --- */
+        .viewer {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.95); z-index: 9999;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        .viewer.active { display: flex; }
+        .viewer img {
+            max-width: 100%; max-height: 75vh; border-radius: 8px;
+            object-fit: contain;
+        }
+        .viewer-controls {
+            display: flex; gap: 10px; margin-top: 15px; width: 100%; max-width: 500px;
+        }
+        .viewer-controls button {
+            flex: 1; padding: 14px; border-radius: 8px; border: none;
+            font-weight: bold; font-size: 14px; cursor: pointer;
+        }
+        .viewer-nav {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            background: rgba(255,255,255,0.1); color: #fff; border: none;
+            font-size: 32px; padding: 10px 18px; cursor: pointer; border-radius: 8px;
+            user-select: none;
+        }
+        .viewer-nav.prev { left: 10px; }
+        .viewer-nav.next { right: 10px; }
+        .viewer-counter {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            color: #fff; font-size: 14px; font-weight: bold;
+            background: rgba(0,0,0,0.6); padding: 6px 12px; border-radius: 6px;
+        }
+        .viewer-close {
+            position: absolute; top: 15px; right: 15px;
+            background: rgba(255,255,255,0.15); color: #fff; border: none;
+            width: 40px; height: 40px; border-radius: 20px; font-size: 20px;
+            cursor: pointer; font-weight: bold;
+        }
+
+        /* --- LOCK SYSTEM --- */
+        .lockable.locked {
+            pointer-events: none;
+            opacity: 0.45;
+            filter: grayscale(0.5);
+        }
+        .lock-bar {
+            position: sticky; bottom: 0; left: 0; right: 0; margin: 20px -20px -20px -20px;
+            padding: 14px 20px; background: #1a1a1a;
+            border-top: 1px solid #333;
+            z-index: 100;
+        }
+        .lock-btn {
+            width: 100%; padding: 14px; border-radius: 10px; border: none;
+            font-weight: bold; font-size: 14px; cursor: pointer;
+            background: #333; color: #aaa; letter-spacing: 1px;
+            position: relative; overflow: hidden;
+            -webkit-user-select: none; user-select: none;
+            -webkit-touch-callout: none;
+        }
+        .lock-btn.locked-state {
+            background: #ffaa00; color: #000; font-size: 18px;
+            box-shadow: 0 0 20px rgba(255, 170, 0, 0.4);
+        }
+
+        /* --- AUTO-LOG ACTIVE STATE --- */
+        /* Pale green tint on the page background while auto-logging,
+           so it's obvious at a glance that data is actively being posted. */
+        body.autolog-active {
+            background: #234523;
+        }
+        /* Fill bar that grows left→right while user holds. Sits behind the label. */
+        .lock-btn .hold-fill {
+            position: absolute; top: 0; left: 0; bottom: 0;
+            width: 0%;
+            background: rgba(68, 255, 68, 0.55);
+            transition: width 0.05s linear;
+            pointer-events: none;
+        }
+        .lock-btn .hold-label {
+            position: relative; z-index: 1;  /* sit above the fill */
+        }
+        /* When holding, give the whole button a subtle pulse so it feels active */
+        .lock-btn.holding {
+            background: #2a4a2a;
+        }
     </style>
 </head>
 <body>
@@ -84,7 +199,47 @@ git subtree push --prefix web public main
             <div class="diag-item">Max: (µs) <span id="latMax" class="diag-val" style="color:#ff8844;">--</span></div>
             <div class="diag-item">Avg: (µs) <span id="latAvg" class="diag-val" style="color:#44bbff;">--</span></div>
             <div class="diag-item">Samples: <span id="latCount" class="diag-val">0</span></div>
-            <button class="btn" id="latResetBtn" style="background:#444; color:#fff; margin-top:10px;">RESET STATS</button>
+            <div style="display:flex; gap:8px; margin-top:10px;" class="lockable">
+                <!-- <button class="btn" id="latCopyBtn" style="background:#44bbff; color:#000; margin-top:0; flex:1;">COPY STATS</button> -->
+                <button class="btn" id="latResetBtn" style="background:#444; color:#fff; margin-top:0; flex:1;">RESET STATS</button>
+            </div>
+            <div style="display:flex; gap:8px; margin-top:10px;">
+                <button class="btn" id="latCopyBtn" style="background:#44bbff; color:#000; margin-top:0; flex:1;">COPY STATS</button>
+                <!-- <button class="btn" id="latResetBtn" style="background:#444; color:#fff; margin-top:0; flex:1;">RESET STATS</button> -->
+            </div>
+            <div id="latCopyStatus" style="font-size:11px; color:#44ff44; margin-top:6px; min-height:14px; text-align:center;"></div>
+        </div>
+
+        <div id="autoLogBox" class="diag-box lockable" style="display:none;">
+            <h3>Auto-Log to Sheet</h3>
+            <div class="diag-item" style="flex-direction:column; align-items:stretch;">
+                <span style="color:#888; font-size:11px;">Session Note (auto-attached to every row)</span>
+                <input type="text" id="autoLogNote" placeholder="e.g. bench test, 60A limit, fresh battery" style="margin-top:4px;">
+            </div>
+            <div class="diag-item" style="flex-direction:column; align-items:stretch;">
+                <span style="color:#888; font-size:11px;">Interval (seconds, 1–60)</span>
+                <input type="number" id="autoLogInterval" value="5" min="1" max="60" style="margin-top:4px;">
+            </div>
+            <div class="diag-item">
+                <span style="color:#aaa;">Posted: <span id="autoLogPosted" class="diag-val" style="color:#44ff44;">0</span></span>
+                <span style="color:#aaa;">Failed: <span id="autoLogFailed" class="diag-val" style="color:#ff8844;">0</span></span>
+            </div>
+            <button class="btn" id="autoLogToggleBtn" style="background:#44ff44; color:#000; margin-top:10px;">START AUTO-LOG</button>
+            <div id="autoLogStatus" style="font-size:11px; color:#888; margin-top:6px; min-height:14px; text-align:center;">Idle</div>
+        </div>
+
+        <!-- ============ PHOTO GALLERY ============ -->
+        <div id="photoBox" class="diag-box" style="display:none;">
+            <h3>Reference Photos (Session)</h3>
+            <div id="photoStrip" class="photo-strip">
+                <div id="photoEmpty" class="photo-empty">No photos yet — tap below to add maps, screenshots, etc.</div>
+            </div>
+            <!-- Lockable wrapper so the Add button is disabled when locked -->
+            <div class="lockable">
+                <input type="file" id="photoInput" accept="image/*" multiple style="display:none;">
+                <button id="addPhotoBtn" class="add-photo-btn">+ ADD PHOTOS</button>
+            </div>
+            <div id="photoStatus" style="font-size:11px; color:#888; margin-top:6px; min-height:14px; text-align:center;"></div>
         </div>
 
         <div id="telemetry" style="display:none; overflow-x: auto;">
@@ -98,7 +253,7 @@ git subtree push --prefix web public main
 
         <button id="connectBtn" class="btn connect-btn">SEARCH FOR CONTROLLER</button>
 
-        <div id="controls" style="display:none;">
+        <div id="controls" class="lockable" style="display:none;">
             
             <section>
                 <label>Input Source</label>
@@ -135,10 +290,67 @@ git subtree push --prefix web public main
             
             <button class="btn stop-btn" id="stopBtn">EMERGENCY STOP</button>
         </div>
+
+        <!-- ============ LOCK BAR ============ -->
+        <!-- Sits OUTSIDE .lockable so it stays tappable when locked. -->
+        <div id="lockBar" class="lock-bar" style="display:none;">
+            <button id="lockBtn" class="lock-btn">
+                <span class="hold-fill" id="lockHoldFill"></span>
+                <span class="hold-label" id="lockBtnLabel">🔒 LOCK CONTROLS</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ============ PHOTO VIEWER MODAL ============ -->
+    <div id="photoViewer" class="viewer">
+        <button class="viewer-close" id="viewerClose">✕</button>
+        <div class="viewer-counter" id="viewerCounter">1 / 1</div>
+        <button class="viewer-nav prev" id="viewerPrev">‹</button>
+        <img id="viewerImg" src="" alt="">
+        <button class="viewer-nav next" id="viewerNext">›</button>
+        <div class="viewer-controls">
+            <button id="viewerShare" style="background:#44ff44; color:#000;">↗ SHARE PHOTO</button>
+            <button id="viewerDelete" style="background:#ff4444; color:#fff;">🗑 DELETE</button>
+        </div>
     </div>
 
     <script>
         let cmdChar, readChar;
+
+        // Cache of most recent latency snapshot, populated on every 'L:' packet.
+        // Used by the Copy Stats button to dump a clean report.
+        let lastLatencySnapshot = null;
+        const sessionStartMs = Date.now();
+
+        // Cache of most recent VESC fleet readings, keyed by VESC ID.
+        const lastVescSnapshot = {};
+
+        // --- AUTO-LOG CONFIG ---
+        // Paste your Apps Script Web App URL here (the same one your Siri Shortcut posts to)
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbydv66XeoWk45Kin7D-6cAgUmsw_SSPqJ7mLEicfYXfYBnKcRCYOYxldmJBUS_eOLW74g/exec';
+
+        let autoLogTimerId  = null;
+        let autoLogPostedN  = 0;
+        let autoLogFailedN  = 0;
+
+        // --- GPS VARIABLES ---
+        let currentLat = '';
+        let currentLon = '';
+        let currentAlt = '';
+
+        // --- PHOTO GALLERY STATE ---
+        // Each photo: { id, url (object URL), file, uploaded: bool, addedAt: ISO string }
+        const photos = [];
+        let viewerIndex = 0;
+
+        // --- LOCK STATE ---
+        let isLocked = false;
+
+
+
+        // // Cache of most recent VESC fleet readings, keyed by VESC ID.
+        // // Populated on every 'V' packet, drained by the Copy Stats button.
+        // const lastVescSnapshot = {};
         
         // Do not use hex integers. Bluefy's Swift bridge requires full strings.
         const SERVICE_UUID = "00001234-0000-1000-8000-00805f9b34fb";
@@ -187,7 +399,7 @@ git subtree push --prefix web public main
                             document.getElementById('latAvg').innerText = parts[3];
                             document.getElementById('latCount').innerText = parts[4];
 
-                            // Helper: convert microseconds since Unix epoch to "YYYY-MM-DD HH:MM:SS.uuuuuu UTC"
+                            // Helper: convert microseconds since Unix epoch to "YYYY-MM-DD HH:MM:SS.uuuuuu "
                             // Showing all 6 microsecond digits makes the unit unambiguous on inspection.
                             const pad = (n, w=2) => String(n).padStart(w, '0');
                             const formatEpochUs = (epochUs) => {
@@ -196,7 +408,7 @@ git subtree push --prefix web public main
                                 const d = new Date(ms);
                                 return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ` +
                                        `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}` +
-                                       `.${String(usFraction).padStart(6, '0')} UTC`;
+                                       `.${String(usFraction).padStart(6, '0')}`;
                             };
 
                             // Δ in µs (parts[5])
@@ -211,15 +423,31 @@ git subtree push --prefix web public main
                                 const ms = pad(Math.floor(wallUsec / 1000), 3);
                                 document.getElementById('latWallClock').innerText =
                                     `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ` +
-                                    `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}.${ms} UTC`;
+                                    `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}.${ms}`;
                             }
                             // t0 / t2 wall-clock (parts[10], parts[11]) — JS Number is fine: epoch µs ≈ 1.78e15, well below 2^53
+                            let t0Wall = null, t2Wall = null;
                             if (parts.length >= 12) {
                                 const t0Us = parseInt(parts[10], 10);
                                 const t2Us = parseInt(parts[11], 10);
-                                document.getElementById('latT0Wall').innerText = formatEpochUs(t0Us);
-                                document.getElementById('latT2Wall').innerText = formatEpochUs(t2Us);
+                                t0Wall = formatEpochUs(t0Us);
+                                t2Wall = formatEpochUs(t2Us);
+                                document.getElementById('latT0Wall').innerText = t0Wall;
+                                document.getElementById('latT2Wall').innerText = t2Wall;
                             }
+
+                            // Stash structured snapshot for the Copy button to dump
+                            lastLatencySnapshot = {
+                                min_us:    parts[1],
+                                max_us:    parts[2],
+                                avg_us:    parts[3],
+                                samples:   parts[4],
+                                last_us:   parts.length >= 6 ? parts[5] : null,
+                                t0_wall:   t0Wall,
+                                t2_wall:   t2Wall,
+                                wall_now:  document.getElementById('latWallClock').innerText,
+                                received_at: new Date().toISOString()
+                            };
                             return;
                         }
 
@@ -240,6 +468,9 @@ git subtree push --prefix web public main
                             document.getElementById(`rpm-${id}`).innerText = Math.round(rpm);
                             document.getElementById(`cur-${id}`).innerText = cur;
                             document.getElementById(`duty-${id}`).innerText = duty + "%";
+
+                            // Stash structured snapshot for the Copy button
+                            lastVescSnapshot[id] = { erpm: rpm, current: cur, duty: duty };
                         }
                     });
                 });
@@ -250,12 +481,30 @@ git subtree push --prefix web public main
                 document.getElementById('connectBtn').style.display = "none";
                 document.getElementById('remoteDiag').style.display = "block";
                 document.getElementById('latencyDiag').style.display = "block";
+                document.getElementById('autoLogBox').style.display = "block";
+                document.getElementById('photoBox').style.display = "block";
                 document.getElementById('controls').style.display = "block";
                 document.getElementById('telemetry').style.display = "block";
+                document.getElementById('lockBar').style.display = "block";
 
                 // Sync ESP32's wall clock to the browser's current Unix time (UTC seconds)
                 const nowUnixSec = Math.floor(Date.now() / 1000);
                 send('TIME', nowUnixSec);
+
+                // --- START GPS TRACKING ---
+                if ('geolocation' in navigator) {
+                    navigator.geolocation.watchPosition(
+                        (pos) => {
+                            currentLat = pos.coords.latitude.toFixed(6);
+                            currentLon = pos.coords.longitude.toFixed(6);
+                            currentAlt = pos.coords.altitude ? pos.coords.altitude.toFixed(2) : '';
+                        },
+                        (err) => console.warn("GPS Error: ", err.message),
+                        { enableHighAccuracy: true, maximumAge: 2000 }
+                    );
+                } else {
+                    console.warn("Geolocation is not supported by this browser.");
+                }
 
             } catch (e) { 
                 console.error(e);
@@ -293,6 +542,463 @@ git subtree push --prefix web public main
         });
 
         document.getElementById('latResetBtn').addEventListener('click', () => send('LRST', 0));
+
+            // --- COPY LATENCY STATS ---
+            // Builds a two-section text payload (human summary + TSV row) and copies it
+            // via the modern clipboard API, with a hidden-textarea fallback for older
+            // WebViews / iOS Bluefy where navigator.clipboard isn't available.
+            const flashCopyStatus = (msg, color) => {
+                const el = document.getElementById('latCopyStatus');
+                el.style.color = color || '#44ff44';
+                el.innerText = msg;
+                setTimeout(() => { el.innerText = ''; }, 2500);
+            };
+
+            const fallbackCopy = (text) => {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                let ok = false;
+                try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+                document.body.removeChild(ta);
+                return ok;
+            };
+
+            // Builds the full snapshot text (human block + TSV header + TSV row + Note line).
+            // noteOverride: optional string. If provided, the snapshot ends with "Note: <text>".
+            // If not provided, ends with "Note: " (blank, for user to fill in after pasting).
+            function buildSnapshotText(noteOverride) {
+                if (!lastLatencySnapshot) return null;
+                const s = lastLatencySnapshot;
+                const sessionDurSec = ((Date.now() - sessionStartMs) / 1000).toFixed(1);
+
+                const rawThrottleVal = document.getElementById('remThrot').innerText || '0';
+
+                const vescIds = Object.keys(lastVescSnapshot).sort((a, b) => Number(a) - Number(b));
+                const v1id = vescIds[0] ?? '';
+                const v2id = vescIds[1] ?? '';
+                const v1 = v1id ? lastVescSnapshot[v1id] : null;
+                const v2 = v2id ? lastVescSnapshot[v2id] : null;
+
+                const tsvHeader = [
+                    'received_at','samples','min_us','max_us','avg_us','last_us','t0_wall','t2_wall','wall_now',
+                    'raw_throttle',
+                    'vesc1_id','vesc1_erpm','vesc1_current','vesc1_duty',
+                    'vesc2_id','vesc2_erpm','vesc2_current','vesc2_duty',
+                    'latitude','longitude','altitude'
+                ].join('\t');
+
+                const tsvRow = [
+                    s.received_at, s.samples, s.min_us, s.max_us, s.avg_us,
+                    s.last_us ?? '', s.t0_wall ?? '', s.t2_wall ?? '', s.wall_now ?? '',
+                    rawThrottleVal,
+                    v1id, v1?.erpm ?? '', v1?.current ?? '', v1?.duty ?? '',
+                    v2id, v2?.erpm ?? '', v2?.current ?? '', v2?.duty ?? '',
+                    currentLat, currentLon, currentAlt
+                ].join('\t');
+
+                const noteLine = (typeof noteOverride === 'string')
+                    ? `Note: ${noteOverride}`
+                    : `Note: `;
+
+                return [
+                    `VESC Fleet Tuner — Latency Snapshot`,
+                    `Captured (browser):   ${s.received_at}`,
+                    `Session duration:     ${sessionDurSec} s`,
+                    `Samples:              ${s.samples}`,
+                    `Min (µs):             ${s.min_us}`,
+                    `Max (µs):             ${s.max_us}`,
+                    `Avg (µs):             ${s.avg_us}`,
+                    `Last Δ (µs):          ${s.last_us ?? 'n/a'}`,
+                    `t0 (BLE arrival):     ${s.t0_wall ?? 'n/a'}`,
+                    `t2 (CAN dispatch):    ${s.t2_wall ?? 'n/a'}`,
+                    `Wall clock at sample: ${s.wall_now ?? 'n/a'}`,
+                    `GPS:                  ${currentLat ? `${currentLat}, ${currentLon} (Alt: ${currentAlt}m)` : 'Acquiring...'}`,
+                    `Drive Input:         ${rawThrottleVal}`,
+                    `VESC 1:               ${v1id ? `id=${v1id} erpm=${v1.erpm} I=${v1.current}A duty=${v1.duty}%` : 'none'}`,
+                    `VESC 2:               ${v2id ? `id=${v2id} erpm=${v2.erpm} I=${v2.current}A duty=${v2.duty}%` : 'none'}`,
+                    ``,
+                    tsvHeader,
+                    tsvRow,
+                    ``,
+                    noteLine
+                ].join('\n');
+            }
+
+            document.getElementById('latCopyBtn').addEventListener('click', async () => {
+                const text = buildSnapshotText();  // no override → empty Note: line for user to fill
+                if (!text) {
+                    flashCopyStatus('No latency data yet — wait for a sample.', '#ff8844');
+                    return;
+                }
+
+                let ok = false;
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(text);
+                        ok = true;
+                    } else {
+                        ok = fallbackCopy(text);
+                    }
+                } catch (e) {
+                    ok = fallbackCopy(text);
+                }
+
+                if (ok) flashCopyStatus(`Copied ${lastLatencySnapshot.samples} samples to clipboard`, '#44ff44');
+                else    flashCopyStatus('Copy failed — check browser permissions', '#ff4444');
+            });
+
+            // --- AUTO-LOG TIMER ---
+        async function postSnapshotToScript() {
+            if (APPS_SCRIPT_URL === 'PASTE_YOUR_WEB_APP_URL_HERE' || !APPS_SCRIPT_URL) {
+                document.getElementById('autoLogStatus').innerText = 'Apps Script URL not configured';
+                document.getElementById('autoLogStatus').style.color = '#ff4444';
+                return;
+            }
+            const note = document.getElementById('autoLogNote').value || '';
+            const text = buildSnapshotText(note);
+            if (!text) {
+                // No latency sample yet — skip silently, try again next tick
+                return;
+            }
+            try {
+                // text/plain + no-cors avoids preflight and lets the request through to Apps Script
+                // even though Apps Script doesn't set CORS response headers. Response is opaque.
+                await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+                    body: text
+                });
+                autoLogPostedN++;
+                document.getElementById('autoLogPosted').innerText = autoLogPostedN;
+                const ts = new Date().toLocaleTimeString();
+                const stEl = document.getElementById('autoLogStatus');
+                stEl.style.color = '#44ff44';
+                stEl.innerText = `Last post: ${ts}`;
+            } catch (err) {
+                autoLogFailedN++;
+                document.getElementById('autoLogFailed').innerText = autoLogFailedN;
+                const stEl = document.getElementById('autoLogStatus');
+                stEl.style.color = '#ff4444';
+                stEl.innerText = `Post failed: ${err.message || err}`;
+            }
+        }
+
+        document.getElementById('autoLogToggleBtn').addEventListener('click', () => {
+            const btn = document.getElementById('autoLogToggleBtn');
+            const stEl = document.getElementById('autoLogStatus');
+
+            if (autoLogTimerId === null) {
+                // Start
+                const intervalSec = Math.max(1, Math.min(60, parseInt(document.getElementById('autoLogInterval').value, 10) || 5));
+                document.getElementById('autoLogInterval').value = intervalSec;  // clamp display
+                postSnapshotToScript();  // immediate first post
+                autoLogTimerId = setInterval(postSnapshotToScript, intervalSec * 1000);
+                btn.innerText = 'STOP AUTO-LOG';
+                btn.style.background = '#ff4444';
+                btn.style.color = '#fff';
+                stEl.style.color = '#44ff44';
+                stEl.innerText = `Logging every ${intervalSec}s…`;
+                document.body.classList.add('autolog-active');
+            } else {
+                // Stop
+                clearInterval(autoLogTimerId);
+                autoLogTimerId = null;
+                btn.innerText = 'START AUTO-LOG';
+                btn.style.background = '#44ff44';
+                btn.style.color = '#000';
+                stEl.style.color = '#888';
+                stEl.innerText = 'Stopped';
+                document.body.classList.remove('autolog-active');
+            }
+        });
+
+        // ============================================================
+        // ============ PHOTO GALLERY ============
+        // ============================================================
+        const photoInput   = document.getElementById('photoInput');
+        const photoStrip   = document.getElementById('photoStrip');
+        const photoEmpty   = document.getElementById('photoEmpty');
+        const photoStatus  = document.getElementById('photoStatus');
+        const addPhotoBtn  = document.getElementById('addPhotoBtn');
+
+        const viewer        = document.getElementById('photoViewer');
+        const viewerImg     = document.getElementById('viewerImg');
+        const viewerCounter = document.getElementById('viewerCounter');
+        const viewerClose   = document.getElementById('viewerClose');
+        const viewerPrev    = document.getElementById('viewerPrev');
+        const viewerNext    = document.getElementById('viewerNext');
+        const viewerShare   = document.getElementById('viewerShare');
+        const viewerDelete  = document.getElementById('viewerDelete');
+
+        const flashPhotoStatus = (msg, color) => {
+            photoStatus.style.color = color || '#44ff44';
+            photoStatus.innerText = msg;
+            setTimeout(() => { photoStatus.innerText = ''; }, 2500);
+        };
+
+        function renderPhotoStrip() {
+            // Remove all thumbnails (keep the empty placeholder around but toggle it)
+            photoStrip.querySelectorAll('.photo-thumb').forEach(el => el.remove());
+
+            if (photos.length === 0) {
+                photoEmpty.style.display = 'block';
+                return;
+            }
+            photoEmpty.style.display = 'none';
+
+            photos.forEach((p, idx) => {
+                const thumb = document.createElement('div');
+                thumb.className = 'photo-thumb';
+                thumb.style.backgroundImage = `url("${p.url}")`;
+                thumb.addEventListener('click', () => openViewer(idx));
+                photoStrip.appendChild(thumb);
+            });
+        }
+
+        addPhotoBtn.addEventListener('click', () => photoInput.click());
+
+        photoInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files || []);
+            if (files.length === 0) return;
+            files.forEach(file => {
+                photos.push({
+                    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                    file: file,
+                    url: URL.createObjectURL(file),
+                    addedAt: new Date().toISOString()
+                });
+            });
+            renderPhotoStrip();
+            flashPhotoStatus(`Added ${files.length} photo${files.length === 1 ? '' : 's'}`);
+            // Reset input so picking the same file again still fires 'change'
+            photoInput.value = '';
+        });
+
+        function openViewer(idx) {
+            if (idx < 0 || idx >= photos.length) return;
+            viewerIndex = idx;
+            updateViewer();
+            viewer.classList.add('active');
+        }
+
+        function closeViewer() {
+            viewer.classList.remove('active');
+        }
+
+        function updateViewer() {
+            const p = photos[viewerIndex];
+            if (!p) {
+                closeViewer();
+                return;
+            }
+            viewerImg.src = p.url;
+            viewerCounter.innerText = `${viewerIndex + 1} / ${photos.length}`;
+        }
+
+        viewerClose.addEventListener('click', closeViewer);
+
+        // Click outside the image (on the dark backdrop) closes the viewer.
+        viewer.addEventListener('click', (e) => {
+            if (e.target === viewer) closeViewer();
+        });
+
+        viewerPrev.addEventListener('click', () => {
+            if (photos.length === 0) return;
+            viewerIndex = (viewerIndex - 1 + photos.length) % photos.length;
+            updateViewer();
+        });
+
+        viewerNext.addEventListener('click', () => {
+            if (photos.length === 0) return;
+            viewerIndex = (viewerIndex + 1) % photos.length;
+            updateViewer();
+        });
+
+        // Keyboard nav (works on desktop / external keyboards)
+        document.addEventListener('keydown', (e) => {
+            if (!viewer.classList.contains('active')) return;
+            if (e.key === 'Escape')    closeViewer();
+            if (e.key === 'ArrowLeft') viewerPrev.click();
+            if (e.key === 'ArrowRight') viewerNext.click();
+        });
+
+        // Touch swipe nav for mobile
+        let touchStartX = 0;
+        viewer.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].clientX;
+        }, { passive: true });
+        viewer.addEventListener('touchend', (e) => {
+            const dx = e.changedTouches[0].clientX - touchStartX;
+            if (Math.abs(dx) < 50) return;  // ignore tiny taps
+            if (dx > 0) viewerPrev.click(); else viewerNext.click();
+        }, { passive: true });
+
+        viewerDelete.addEventListener('click', () => {
+            const p = photos[viewerIndex];
+            if (!p) return;
+            if (!confirm('Delete this photo from the session?')) return;
+            URL.revokeObjectURL(p.url);
+            photos.splice(viewerIndex, 1);
+            renderPhotoStrip();
+            if (photos.length === 0) {
+                closeViewer();
+            } else {
+                if (viewerIndex >= photos.length) viewerIndex = photos.length - 1;
+                updateViewer();
+            }
+        });
+
+        // Build a short caption with session context to prefill the share text.
+        // Apps that support text + file (Messages, Mail) will use both.
+        // Apps that only take one (some chat apps) typically prefer the file.
+        function buildShareText(p) {
+            const note = document.getElementById('autoLogNote')?.value || '';
+            const ts   = new Date().toLocaleTimeString();
+            const gps  = currentLat ? `${currentLat},${currentLon}` : 'no GPS';
+            const noteLine = note ? ` | ${note}` : '';
+            return `[VESC ${ts}] ${gps}${noteLine}`;
+        }
+
+        // Open the native share sheet with the photo as an attachment.
+        // navigator.share() with `files` is supported on iOS Safari/Bluefy 15+ and
+        // triggers the system share UI — Messages, Mail, AirDrop, etc. all appear.
+        viewerShare.addEventListener('click', async () => {
+            const p = photos[viewerIndex];
+            if (!p) return;
+
+            const shareData = {
+                files: [p.file],
+                text:  buildShareText(p),
+                title: `VESC Photo ${p.file.name || ''}`.trim()
+            };
+
+            // Feature-detect: canShare with files isn't supported everywhere.
+            if (!navigator.canShare || !navigator.canShare(shareData)) {
+                flashPhotoStatus('Share not supported on this browser', '#ff4444');
+                return;
+            }
+
+            try {
+                await navigator.share(shareData);
+                flashPhotoStatus('Shared', '#44ff44');
+            } catch (err) {
+                // AbortError = user dismissed the share sheet; not really a failure.
+                if (err.name === 'AbortError') {
+                    flashPhotoStatus('Share cancelled', '#888');
+                } else {
+                    console.warn('Share failed:', err);
+                    flashPhotoStatus(`Share failed: ${err.message || err.name}`, '#ff4444');
+                }
+            }
+        });
+
+        // ============================================================
+        // ============ LOCK SYSTEM (HOLD TO UNLOCK) ============
+        // ============================================================
+        // Locking is a single tap (no hold required — locking is safe).
+        // Unlocking requires a sustained press of HOLD_DURATION_MS to prevent
+        // accidental pocket-taps during a ride.
+        const HOLD_DURATION_MS = 1000;  // tweak: longer = harder to accidentally trigger
+
+        const lockBtn       = document.getElementById('lockBtn');
+        const lockBtnLabel  = document.getElementById('lockBtnLabel');
+        const lockHoldFill  = document.getElementById('lockHoldFill');
+
+        let holdRafId    = null;
+        let holdStartMs  = 0;
+        // When a hold completes successfully, iOS still dispatches a 'click' on
+        // pointerup since the same finger is still on the button. Without this
+        // flag, that click would re-lock immediately. We set the flag when the
+        // hold completes and the click handler reads-and-clears it to no-op.
+        let suppressNextClick = false;
+
+        function setLock(locked) {
+            isLocked = locked;
+            document.querySelectorAll('.lockable').forEach(el => {
+                el.classList.toggle('locked', locked);
+            });
+            if (locked) {
+                lockBtnLabel.innerText = '🔓 HOLD TO UNLOCK';
+                lockBtn.classList.add('locked-state');
+            } else {
+                lockBtnLabel.innerText = '🔒 LOCK CONTROLS';
+                lockBtn.classList.remove('locked-state');
+            }
+            // Reset any in-progress hold animation
+            cancelHold();
+        }
+
+        function cancelHold() {
+            if (holdRafId !== null) {
+                cancelAnimationFrame(holdRafId);
+                holdRafId = null;
+            }
+            holdStartMs = 0;
+            lockHoldFill.style.width = '0%';
+            lockBtn.classList.remove('holding');
+        }
+
+        function tickHold() {
+            const elapsed = Date.now() - holdStartMs;
+            const pct = Math.min(100, (elapsed / HOLD_DURATION_MS) * 100);
+            lockHoldFill.style.width = pct + '%';
+            if (elapsed >= HOLD_DURATION_MS) {
+                // Hold complete — unlock, then arm the click suppression so the
+                // upcoming pointerup→click doesn't immediately re-lock.
+                cancelHold();
+                suppressNextClick = true;
+                setLock(false);
+                return;
+            }
+            holdRafId = requestAnimationFrame(tickHold);
+        }
+
+        function startHold() {
+            // Only meaningful when locked; tapping while unlocked goes through the click handler.
+            if (!isLocked) return;
+            holdStartMs = Date.now();
+            lockBtn.classList.add('holding');
+            holdRafId = requestAnimationFrame(tickHold);
+        }
+
+        // --- Locking: simple click. Two cases swallow the click without locking:
+        //     (1) currently locked + user briefly tapped (hold didn't complete)
+        //     (2) hold just completed; the synthetic click from pointerup must be ignored
+        lockBtn.addEventListener('click', (e) => {
+            if (suppressNextClick) {
+                suppressNextClick = false;
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            if (isLocked) {
+                // Brief tap while locked — they need to actually hold.
+                return;
+            }
+            setLock(true);
+        });
+
+        // --- Hold-to-unlock: pointer events cover both touch and mouse.
+        //     Using pointer events instead of touch+mouse separately avoids double-firing.
+        lockBtn.addEventListener('pointerdown', (e) => {
+            if (isLocked) startHold();
+        });
+        // Releasing, leaving, or cancelling all abort the hold (if still in progress).
+        ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => {
+            lockBtn.addEventListener(ev, () => {
+                if (isLocked && holdStartMs > 0) cancelHold();
+            });
+        });
+        lockBtn.addEventListener('touchcancel', () => {
+            if (isLocked && holdStartMs > 0) cancelHold();
+        });
+
     </script>
 </body>
 </html>
