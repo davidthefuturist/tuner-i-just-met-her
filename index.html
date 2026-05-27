@@ -5,7 +5,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "Let's try it again haha."
+git commit -m "UI whooooo"
 git subtree push --prefix web public main
 
 -->
@@ -1056,6 +1056,8 @@ git subtree push --prefix web public main
                     console.warn('Post-finalize BLE teardown (expected):', err);
                 } else {
                     console.error('OTA upload failed:', err);
+                    console.error('OTA catch fired. otaFinalized=', otaFinalized, 'err=', err);
+                    otaSetStatus(`CAUGHT (otaFinalized=${otaFinalized}): ${err.message || err}`, '#ff4444');
                     otaSetStatus(`Upload failed: ${err.message || err}`, '#ff4444');
                     try { await cmdChar.writeValue(new TextEncoder().encode('OTA:ABORT:0')); } catch(_) {}
                 }
