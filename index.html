@@ -5,7 +5,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "OTA SUCCESS! Let's make a small UI change"
+git commit -m "Let's try it again haha"
 git subtree push --prefix web public main
 
 -->
@@ -975,6 +975,7 @@ git subtree push --prefix web public main
 
             const totalBytes = otaSelected.allBytes.length;
             const payloadCrc = otaSelected.headerObj.computedCrc;
+            let otaFinalized = false;   // flips true after OTA:END is sent
 
             try {
                 // // DIAGNOSTIC: try a single 4-byte hardcoded write to otaChar first.
@@ -1030,20 +1031,34 @@ git subtree push --prefix web public main
                 otaSetStatus('Finalizing — device is verifying & rebooting…', '#ffaa00');
                 await cmdChar.writeValue(new TextEncoder().encode(`OTA:END:${payloadCrc}`));
 
-                // The device reboots ~1s after a successful OTA:END. BLE will disconnect.
-                // Set success status, do the cleanup that `finally` would do, then return.
-                // The return short-circuits catch/finally so a post-reboot BLE teardown
-                // can't throw and overwrite the green success message with "Upload failed: 2".
-                otaSetStatus('✓ Upload complete. Device rebooting. Reconnect when ready.', '#44ff44');
+                // Past this point the device owns the outcome. The BLE link will drop
+                // as the device reboots; any exception thrown after this is BLE teardown,
+                // NOT an upload failure. Mark the phase so the catch block knows.
+                otaFinalized = true;
+
+                // The device is now verifying & rebooting. We genuinely don't know the
+                // outcome from here — we'll find out on reconnect by reading the FW v
+                // field from the O: telemetry packet.
+                const expectedVer = otaSelected.headerObj.version;
+                otaSetStatus(
+                    `Bytes sent. Reconnect to verify firmware version. Expected: v${expectedVer}`,
+                    '#44bbff'
+                );
                 otaProgressLabel.innerText = `${(totalBytes/1024).toFixed(1)} KB sent`;
                 otaUploading = false;
                 otaAbortBtn.style.display = 'none';
                 otaPickBtn.style.display  = 'block';
                 return;
             } catch (err) {
-                console.error('OTA upload failed:', err);
-                otaSetStatus(`Upload failed: ${err.message || err}`, '#ff4444');
-                try { await cmdChar.writeValue(new TextEncoder().encode('OTA:ABORT:0')); } catch(_) {}
+                // If we already passed OTA:END, this is BLE teardown from the device
+                // reboot, not an upload failure. Don't clobber the status.
+                if (otaFinalized) {
+                    console.warn('Post-finalize BLE teardown (expected):', err);
+                } else {
+                    console.error('OTA upload failed:', err);
+                    otaSetStatus(`Upload failed: ${err.message || err}`, '#ff4444');
+                    try { await cmdChar.writeValue(new TextEncoder().encode('OTA:ABORT:0')); } catch(_) {}
+                }
             } finally {
                 otaUploading = false;
                 otaAbortBtn.style.display  = 'none';
