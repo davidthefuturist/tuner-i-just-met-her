@@ -5,7 +5,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "YESSS LOCKKKK Put expected firmware version message"
+git commit -m "Small adjustments to finalizing message"
 git subtree push --prefix web public main
 
 -->
@@ -1036,7 +1036,7 @@ git subtree push --prefix web public main
 
                 // 3. Finalize.
                 const expectedVer = otaSelected.headerObj.version;
-                otaSetStatus(`Finalizing — device is verifying & rebooting.\nReconnect to verify firmware. Expected New Firmware Version: v${expectedVer}`, '#ffaa00');
+                otaSetStatus(`Finalizing — device is verifying & rebooting.\nRefresh page and reconnect to verify new firmware.\nExpected New Firmware Version: v${expectedVer}`, '#ffaa00');
                 otaStatusLocked = true;  // Lock the status immediately so no further updates occur
 
                 // CRITICAL FIX: Mark as finalized BEFORE sending the final command.
