@@ -5,7 +5,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "OTA Attempt 3.5; Attempt 3 successful"
+git commit -m "Changed back to 200 chunk size lmao. OTA Attempt 3.7"
 git subtree push --prefix web public main
 
 -->
@@ -418,7 +418,7 @@ git subtree push --prefix web public main
         // Chunk size for BLE OTA upload. ESP32-C3 negotiates ~244-byte MTU with most
         // clients; sending 200 leaves comfortable headroom for ATT/L2CAP overhead and
         // works on iOS Safari/Bluefy which is more conservative than Chrome.
-        const OTA_CHUNK_SIZE = 20;
+        const OTA_CHUNK_SIZE = 200;
         
         // Do not use hex integers. Bluefy's Swift bridge requires full strings.
         const SERVICE_UUID = "00001234-0000-1000-8000-00805f9b34fb";
