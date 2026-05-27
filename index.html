@@ -5,7 +5,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "Changed back to 200 chunk size lmao. OTA Attempt 3.7"
+git commit -m "OTA SUCCESS! Let's make a small UI change"
 git subtree push --prefix web public main
 
 -->
@@ -1031,9 +1031,15 @@ git subtree push --prefix web public main
                 await cmdChar.writeValue(new TextEncoder().encode(`OTA:END:${payloadCrc}`));
 
                 // The device reboots ~1s after a successful OTA:END. BLE will disconnect.
-                // Don't expect any further telemetry; let the user reconnect manually.
+                // Set success status, do the cleanup that `finally` would do, then return.
+                // The return short-circuits catch/finally so a post-reboot BLE teardown
+                // can't throw and overwrite the green success message with "Upload failed: 2".
                 otaSetStatus('✓ Upload complete. Device rebooting. Reconnect when ready.', '#44ff44');
                 otaProgressLabel.innerText = `${(totalBytes/1024).toFixed(1)} KB sent`;
+                otaUploading = false;
+                otaAbortBtn.style.display = 'none';
+                otaPickBtn.style.display  = 'block';
+                return;
             } catch (err) {
                 console.error('OTA upload failed:', err);
                 otaSetStatus(`Upload failed: ${err.message || err}`, '#ff4444');
@@ -1042,7 +1048,6 @@ git subtree push --prefix web public main
                 otaUploading = false;
                 otaAbortBtn.style.display  = 'none';
                 otaPickBtn.style.display   = 'block';
-                // Don't re-show upload button after a complete upload — the device is gone.
             }
         });
 
