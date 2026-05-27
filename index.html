@@ -5,7 +5,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "Lock PLEASEEEE"
+git commit -m "Lock PLEASEEEE goddd"
 git subtree push --prefix web public main
 
 -->
@@ -1036,18 +1036,23 @@ git subtree push --prefix web public main
 
                 // 3. Finalize.
                 otaSetStatus('Finalizing — device is verifying & rebooting…', '#ffaa00');
-                otaStatusLocked = true;  // Lock the status immediately so no further updates occur
+                otaStatusLocked = true;  // Lock the status immediately so no further updates occur
 
-                await cmdChar.writeValue(new TextEncoder().encode(`OTA:END:${payloadCrc}`));
-
-                // Past this point the device owns the outcome. The BLE link will drop
-                // as the device reboots; any exception thrown after this is BLE teardown,
-                // NOT an upload failure. Mark the phase so the catch block knows.
+                // CRITICAL FIX: Mark as finalized BEFORE sending the final command.
+                // The ESP32 reboots so quickly that the BLE connection will drop before 
+                // the browser gets the write acknowledgment, which throws an expected error.
                 otaFinalized = true;
+
+                try {
+                    await cmdChar.writeValue(new TextEncoder().encode(`OTA:END:${payloadCrc}`));
+                } catch (finalErr) {
+                    console.warn('Expected disconnect during OTA:END write:', finalErr);
+                }
+
                 otaProgressLabel.innerText = `${(totalBytes/1024).toFixed(1)} KB sent`;
                 otaUploading = false;
                 otaAbortBtn.style.display = 'none';
-                otaPickBtn.style.display  = 'block';
+                otaPickBtn.style.display  = 'block';
                 return;
             } catch (err) {
                 // After finalization the status line is locked and these calls become no-ops,
