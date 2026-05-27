@@ -5,7 +5,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "After Finalizing — device is verifying & rebooting, no further messages"
+git commit -m "Lock PLEASEEEE"
 git subtree push --prefix web public main
 
 -->
@@ -1036,22 +1036,14 @@ git subtree push --prefix web public main
 
                 // 3. Finalize.
                 otaSetStatus('Finalizing — device is verifying & rebooting…', '#ffaa00');
+                otaStatusLocked = true;  // Lock the status immediately so no further updates occur
+
                 await cmdChar.writeValue(new TextEncoder().encode(`OTA:END:${payloadCrc}`));
 
                 // Past this point the device owns the outcome. The BLE link will drop
                 // as the device reboots; any exception thrown after this is BLE teardown,
                 // NOT an upload failure. Mark the phase so the catch block knows.
                 otaFinalized = true;
-
-                // The device is now verifying & rebooting. We genuinely don't know the
-                // outcome from here — we'll find out on reconnect by reading the FW v
-                // field from the O: telemetry packet.
-                const expectedVer = otaSelected.headerObj.version;
-                otaSetStatus(
-                    `Bytes sent. Reconnect to verify firmware version. Expected: v${expectedVer}`,
-                    '#44bbff'
-                );
-                otaStatusLocked = true;  // device owns the outcome now — ignore any further writes
                 otaProgressLabel.innerText = `${(totalBytes/1024).toFixed(1)} KB sent`;
                 otaUploading = false;
                 otaAbortBtn.style.display = 'none';
