@@ -5,7 +5,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "UI whooooo"
+git commit -m "After Finalizing — device is verifying & rebooting, no further messages"
 git subtree push --prefix web public main
 
 -->
@@ -857,7 +857,12 @@ git subtree push --prefix web public main
         const otaProgressBar   = document.getElementById('otaProgressBar');
         const otaProgressLabel = document.getElementById('otaProgressLabel');
 
+        // Once true, no further writes to the OTA status line are allowed.
+        // Locked when finalization succeeds; unlocked when user starts a new upload or picks a new file.
+        let otaStatusLocked = false;
+
         function otaSetStatus(msg, color) {
+            if (otaStatusLocked) return;
             otaStatus.style.color = color || '#888';
             otaStatus.innerText = msg;
         }
@@ -891,6 +896,7 @@ git subtree push --prefix web public main
             const file = e.target.files && e.target.files[0];
             otaFileInput.value = '';  // reset so re-picking same file fires 'change'
             if (!file) return;
+            otaStatusLocked = false;  // new file selected — allow status updates again
 
             otaFileInfo.style.display = 'flex';
             document.getElementById('otaFileName').innerText = file.name;
@@ -967,6 +973,7 @@ git subtree push --prefix web public main
 
             otaUploading = true;
             otaAbortFlag = false;
+            otaStatusLocked = false;  // new upload — allow status updates again
             otaUploadBtn.style.display = 'none';
             otaPickBtn.style.display   = 'none';
             otaAbortBtn.style.display  = 'block';
@@ -1044,20 +1051,19 @@ git subtree push --prefix web public main
                     `Bytes sent. Reconnect to verify firmware version. Expected: v${expectedVer}`,
                     '#44bbff'
                 );
+                otaStatusLocked = true;  // device owns the outcome now — ignore any further writes
                 otaProgressLabel.innerText = `${(totalBytes/1024).toFixed(1)} KB sent`;
                 otaUploading = false;
                 otaAbortBtn.style.display = 'none';
                 otaPickBtn.style.display  = 'block';
                 return;
             } catch (err) {
-                // If we already passed OTA:END, this is BLE teardown from the device
-                // reboot, not an upload failure. Don't clobber the status.
+                // After finalization the status line is locked and these calls become no-ops,
+                // so the lock is the real safeguard. We still differentiate the log for clarity.
                 if (otaFinalized) {
                     console.warn('Post-finalize BLE teardown (expected):', err);
                 } else {
                     console.error('OTA upload failed:', err);
-                    console.error('OTA catch fired. otaFinalized=', otaFinalized, 'err=', err);
-                    otaSetStatus(`CAUGHT (otaFinalized=${otaFinalized}): ${err.message || err}`, '#ff4444');
                     otaSetStatus(`Upload failed: ${err.message || err}`, '#ff4444');
                     try { await cmdChar.writeValue(new TextEncoder().encode('OTA:ABORT:0')); } catch(_) {}
                 }
