@@ -428,6 +428,7 @@ git subtree push --prefix web public main
 
         document.getElementById('connectBtn').addEventListener('click', async () => {
             try {
+                
                 // The Ultimate Bluefy Bypass
                 const device = await navigator.bluetooth.requestDevice({
                     acceptAllDevices: true,
@@ -976,6 +977,13 @@ git subtree push --prefix web public main
             const payloadCrc = otaSelected.headerObj.computedCrc;
 
             try {
+                // DIAGNOSTIC: try a single 4-byte hardcoded write to otaChar first.
+                // If THIS throws error 2, the problem is the characteristic, not the data.
+                otaSetStatus('TEST: writing 4 bytes to otaChar...', '#ffaa00');
+                await otaChar.writeValue(new Uint8Array([1,2,3,4]));
+                otaSetStatus('TEST: 4-byte write succeeded.', '#44ff44');
+                return;  // bail before the real upload runs, just for this test
+                
                 // 1. Tell the device to begin a session.
                 otaSetStatus('Starting session…', '#44bbff');
                 await cmdChar.writeValue(new TextEncoder().encode(`OTA:START:${totalBytes}`));
