@@ -5,7 +5,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "OTA Attempt 3"
+git commit -m "OTA Attempt 3.5; Attempt 3 successful"
 git subtree push --prefix web public main
 
 -->
@@ -977,12 +977,12 @@ git subtree push --prefix web public main
             const payloadCrc = otaSelected.headerObj.computedCrc;
 
             try {
-                // DIAGNOSTIC: try a single 4-byte hardcoded write to otaChar first.
-                // If THIS throws error 2, the problem is the characteristic, not the data.
-                otaSetStatus('TEST: writing 4 bytes to otaChar...', '#ffaa00');
-                await otaChar.writeValue(new Uint8Array([1,2,3,4]));
-                otaSetStatus('TEST: 4-byte write succeeded.', '#44ff44');
-                return;  // bail before the real upload runs, just for this test
+                // // DIAGNOSTIC: try a single 4-byte hardcoded write to otaChar first.
+                // // If THIS throws error 2, the problem is the characteristic, not the data.
+                // otaSetStatus('TEST: writing 4 bytes to otaChar...', '#ffaa00');
+                // await otaChar.writeValue(new Uint8Array([1,2,3,4]));
+                // otaSetStatus('TEST: 4-byte write succeeded.', '#44ff44');
+                // return;  // bail before the real upload runs, just for this test
                 
                 // 1. Tell the device to begin a session.
                 otaSetStatus('Starting session…', '#44bbff');
@@ -1004,12 +1004,14 @@ git subtree push --prefix web public main
                         throw new Error('aborted');
                     }
                     const end = Math.min(sent + OTA_CHUNK_SIZE, totalBytes);
-                    const chunk = otaSelected.allBytes.subarray(sent, end);
+                    // Copy the chunk into a fresh array — some BLE bridges
+                    // mishandle typed-array views with non-zero byteOffset.
+                    const chunk = otaSelected.allBytes.slice(sent, end);
 
-                    // writeValueWithoutResponse is dramatically faster than the
-                    // confirmed write — we rely on TCP-like reliability of BLE
-                    // L2CAP and the device-side CRC check to catch any drops.
                     await otaChar.writeValue(chunk);
+                    // Throttle: give Bluefy's write queue time to drain.
+                    // 10 ms is conservative; you can tune down if it works.
+                    await new Promise(r => setTimeout(r, 10));
 
                     sent = end;
 
