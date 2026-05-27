@@ -5,7 +5,7 @@
 SAVE THEN:
 
 git add web
-git commit -m "Lock PLEASEEEE goddd"
+git commit -m "YESSS LOCKKKK Put expected firmware version message"
 git subtree push --prefix web public main
 
 -->
@@ -1035,8 +1035,9 @@ git subtree push --prefix web public main
                 }
 
                 // 3. Finalize.
-                otaSetStatus('Finalizing — device is verifying & rebooting…', '#ffaa00');
-                otaStatusLocked = true;  // Lock the status immediately so no further updates occur
+                const expectedVer = otaSelected.headerObj.version;
+                otaSetStatus(`Finalizing — device is verifying & rebooting.\nReconnect to verify firmware. Expected New Firmware Version: v${expectedVer}`, '#ffaa00');
+                otaStatusLocked = true;  // Lock the status immediately so no further updates occur
 
                 // CRITICAL FIX: Mark as finalized BEFORE sending the final command.
                 // The ESP32 reboots so quickly that the BLE connection will drop before 
