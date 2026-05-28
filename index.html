@@ -304,7 +304,7 @@ git subtree push --prefix web public main
                 <tr id="rpmRow"><td class="metric-label">ERPM</td></tr>
                 <tr id="curRow"><td class="metric-label">CURRENT</td></tr>
                 <tr id="dutyRow"><td class="metric-label">ACTUAL DUTY</td></tr>
-            </table>
+                <tr id="voltsRow"><td class="metric-label">VOLTAGE</td></tr> </table>
         </div>
 
         <button id="connectBtn" class="btn connect-btn">SEARCH FOR CONTROLLER</button>
@@ -598,6 +598,7 @@ git subtree push --prefix web public main
                             const rpm = parts[1];
                             const cur = parts[2];
                             const duty = parts[3];
+                            const volts = parts[4];
                             
                             // Dynamically build the table if a new VESC ID appears
                             if(!document.getElementById(`head-${id}`)) {
@@ -605,13 +606,17 @@ git subtree push --prefix web public main
                                 document.getElementById('rpmRow').insertAdjacentHTML('beforeend', `<td id="rpm-${id}" class="val-text">0</td>`);
                                 document.getElementById('curRow').insertAdjacentHTML('beforeend', `<td id="cur-${id}" class="val-text" style="color:#44bbff">0.0</td>`);
                                 document.getElementById('dutyRow').insertAdjacentHTML('beforeend', `<td id="duty-${id}" class="val-text" style="color:#ffbb44">0.0%</td>`);
+                                document.getElementById('voltsRow').insertAdjacentHTML('beforeend', `<td id="volts-${id}" class="val-text" style="color:#44ff44">0.0V</td>`); // <-- ADDED
                             }
                             document.getElementById(`rpm-${id}`).innerText = Math.round(rpm);
                             document.getElementById(`cur-${id}`).innerText = cur;
                             document.getElementById(`duty-${id}`).innerText = duty + "%";
-
-                            // Stash structured snapshot for the Copy button
-                            lastVescSnapshot[id] = { erpm: rpm, current: cur, duty: duty };
+                            
+                            if (volts !== undefined) {
+                                document.getElementById(`volts-${id}`).innerText = volts + "V";
+                                // Stash structured snapshot for the Copy button
+                                lastVescSnapshot[id] = { erpm: rpm, current: cur, duty: duty, voltage: volts };
+                            }
                         }
                     });
                 });
