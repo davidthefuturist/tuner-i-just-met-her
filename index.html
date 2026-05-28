@@ -337,6 +337,14 @@ git subtree push --prefix web public main
                 </select>
             </section>
 
+            <section>
+                <label>Brake Behavior</label>
+                <select id="brakeSelect">
+                    <option value="0">Full Forward/Full Reverse</option>
+                    <option value="1">Brake On Reverse</option>
+                </select>
+            </section>
+
             <section><label>Drive Input (-384 to 384)</label><input type="number" id="driveIn" value="0" min="-384" max="384"></section>
             <section><label>Deadband (+/- Raw Value)</label><input type="number" id="dbandIn" placeholder="loading…"></section>
             
@@ -472,9 +480,10 @@ git subtree push --prefix web public main
                         // Device settings: S:current_limit:rpm_limit:deadband
                         // Sent ~2x/sec by firmware so the UI always reflects the
                         // build's actual operational values, not hardcoded HTML defaults.
+                        // Device settings: S:current_limit:rpm_limit:deadband:regen_limit:brake_only
                         if (report.startsWith('S:')) {
                             const parts = report.split(':');
-                            if (parts.length >= 4) {
+                            if (parts.length >= 6) { // Ensure we have all parts
                                 const updateIfUnfocused = (id, val) => {
                                     const el = document.getElementById(id);
                                     if (document.activeElement !== el) el.value = val;
@@ -482,6 +491,11 @@ git subtree push --prefix web public main
                                 updateIfUnfocused('climIn', parts[1]);
                                 updateIfUnfocused('mlimIn', parts[2]);
                                 updateIfUnfocused('dbandIn', parts[3]);
+                                updateIfUnfocused('rlimIn', parts[4]); 
+                                
+                                // <-- ADDED: Update Brake Select Box from telemetry
+                                const brakeEl = document.getElementById('brakeSelect');
+                                if (document.activeElement !== brakeEl) brakeEl.value = parts[5];
                             }
                             return;
                         }
@@ -656,6 +670,7 @@ git subtree push --prefix web public main
         // UI Event Listeners
         document.getElementById('sourceSelect').addEventListener('change', (e) => send('SRC', e.target.value));
         document.getElementById('modeSelect').addEventListener('change', (e) => send('MODE', e.target.value));
+        document.getElementById('brakeSelect').addEventListener('change', (e) => send('BRAKE', e.target.value));
         document.getElementById('socSourceSelect').addEventListener('change', (e) => send('SSRC', e.target.value));
         
         setup('socIn', 'SVAL');
