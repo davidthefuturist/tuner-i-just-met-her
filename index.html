@@ -560,6 +560,9 @@ git subtree push --prefix web public main
                         }
 
                         // OTA status: O:state:received:total:product_id:fw_version:last_error
+                        // OTA status: O:state:received:total:product_id:fw_version:last_error
+                        // fw_version is encoded as MAJOR_MINOR_PATCH (underscores, not dots)
+                        // so it survives the ':' split as a single field. We swap _ → . for display.
                         if (report.startsWith('O:')) {
                             const parts = report.split(':');
                             if (parts.length < 7) return;
@@ -567,13 +570,13 @@ git subtree push --prefix web public main
                             const received = parseInt(parts[2], 10);
                             const total    = parseInt(parts[3], 10);
                             const pid      = parseInt(parts[4], 10);
-                            const fw       = parseInt(parts[5], 10);
+                            const fw       = parts[5].replace(/_/g, '.');
                             const lastErr  = parts[6];
 
                             devicePid = pid;
                             deviceFw  = fw;
                             document.getElementById('otaDevPid').innerText = pid;
-                            document.getElementById('otaDevFw').innerText  = fw;
+                            document.getElementById('otaDevFw').innerText  = 'v' + fw;
 
                             const pill = document.getElementById('otaStatePill');
                             pill.className = 'ota-state-pill';
@@ -952,17 +955,21 @@ git subtree push --prefix web public main
 
             // Parse 16-byte little-endian header
             const dv = new DataView(buf, 0, OTA_HEADER_SIZE);
-            const magic   = dv.getUint32(0,  true);
-            const pid     = dv.getUint32(4,  true);
-            const version = dv.getUint32(8,  true);
-            const hdrCrc  = dv.getUint32(12, true);
+            const magic    = dv.getUint32(0,  true);
+            const pid      = dv.getUint32(4,  true);
+            const verMajor = dv.getUint8(8);
+            const verMinor = dv.getUint8(9);
+            const verPatch = dv.getUint16(10, true);
+            const hdrCrc   = dv.getUint32(12, true);
+
+            const versionStr = `${verMajor}.${verMinor}.${verPatch}`;
 
             const payload = bytes.subarray(OTA_HEADER_SIZE);
             const computedCrc = crc32(payload);
 
             document.getElementById('otaFileMagic').innerText = '0x' + magic.toString(16).toUpperCase().padStart(8,'0');
             document.getElementById('otaFilePid').innerText   = pid;
-            document.getElementById('otaFileVer').innerText   = 'v' + version;
+            document.getElementById('otaFileVer').innerText   = 'v' + versionStr;
             document.getElementById('otaFileSize').innerText  = `${payload.length.toLocaleString()} B`;
             document.getElementById('otaFileCrc').innerText   = '0x' + computedCrc.toString(16).toUpperCase().padStart(8,'0');
 
@@ -992,7 +999,7 @@ git subtree push --prefix web public main
                 name: file.name,
                 allBytes: bytes,
                 payloadBytes: payload,
-                headerObj: { magic, pid, version, hdrCrc, computedCrc }
+                headerObj: { magic, pid, verMajor, verMinor, verPatch, versionStr, hdrCrc, computedCrc }
             };
             otaSetStatus('Ready to upload. Make sure motors are stopped.', '#888');
         });
