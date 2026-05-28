@@ -338,11 +338,11 @@ git subtree push --prefix web public main
             </section>
 
             <section><label>Drive Input (-384 to 384)</label><input type="number" id="driveIn" value="0" min="-384" max="384"></section>
-            <section><label>Deadband (+/- Raw Value)</label><input type="number" id="dbandIn" value="15"></section>
+            <section><label>Deadband (+/- Raw Value)</label><input type="number" id="dbandIn" placeholder="loading…"></section>
             
-            <section><label>Current Limit (A)</label><input type="number" id="climIn" value="20"></section>
+            <section><label>Current Limit (A)</label><input type="number" id="climIn" placeholder="loading…"></section>
             <section><label>Regen Limit (A)</label><input type="number" id="rlimIn" value="10"></section>
-            <section><label>RPM Limit (ERPM)</label><input type="number" id="mlimIn" value="15000"></section>
+            <section><label>RPM Limit (ERPM)</label><input type="number" id="mlimIn" placeholder="loading…"></section>
             
             <button class="btn stop-btn" id="stopBtn">EMERGENCY STOP</button>
         </div>
@@ -466,6 +466,23 @@ git subtree push --prefix web public main
                             document.getElementById('remThrot').innerText = parts[2];
                             document.getElementById('remTrig').innerText = parts[3] === '1' ? "PULLED" : "OPEN";
                             document.getElementById('remBtn').innerText = parts[4] === '1' ? "PRESSED" : "OPEN";
+                            return;
+                        }
+
+                        // Device settings: S:current_limit:rpm_limit:deadband
+                        // Sent ~2x/sec by firmware so the UI always reflects the
+                        // build's actual operational values, not hardcoded HTML defaults.
+                        if (report.startsWith('S:')) {
+                            const parts = report.split(':');
+                            if (parts.length >= 4) {
+                                const updateIfUnfocused = (id, val) => {
+                                    const el = document.getElementById(id);
+                                    if (document.activeElement !== el) el.value = val;
+                                };
+                                updateIfUnfocused('climIn', parts[1]);
+                                updateIfUnfocused('mlimIn', parts[2]);
+                                updateIfUnfocused('dbandIn', parts[3]);
+                            }
                             return;
                         }
 
